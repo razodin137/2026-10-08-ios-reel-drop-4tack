@@ -286,6 +286,13 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 const fmtTime = s => { s = Math.max(0, s); const m = Math.floor(s / 60), ss = s - m * 60;
   return m + ':' + String(Math.floor(ss)).padStart(2, '0') + '.' + Math.floor((ss % 1) * 10); };
 const fmtClock = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+// bar.beat.tenths position (4/4) from timeline seconds + session bpm; null if no session bpm
+const barPos = sec => {
+  const bpm = state.session.bpm;
+  if (!bpm) return null;
+  const beats = Math.round(sec * bpm / 60 * 10) / 10;   // nearest tenth of a beat
+  return (Math.floor(beats / 4) + 1) + '.' + (Math.floor(beats % 4) + 1) + '.' + Math.round((beats % 1) * 10);
+};
 
 /* ---------- constants & state ---------- */
 const RULERH = 30, ROWH = 62, BARH = 50;
@@ -427,6 +434,8 @@ function barMeta(t){
   const bits = [];
   if (t.bpm) bits.push(t.bpm + ' bpm');
   if (t.key) bits.push(t.key);
+  const bp = barPos(t.start);
+  if (bp) bits.push('bar ' + bp);
   if (t.tags && t.tags.length) bits.push(t.tags.map(x => '#' + x).join(' '));
   if (t.keep) bits.push('keep');
   bits.push(t.kind);
@@ -518,6 +527,11 @@ function select(id){
   renderPanel();
   renderChips();
 }
+function pmetaHTML(t){
+  return esc(t.recordedAt.replace('T', ' ').slice(0, 19)) + '<br>' +
+    fmtClock(t.duration) + ' · starts ' + fmtClock(t.start) +
+    (barPos(t.start) ? ' · bar ' + barPos(t.start) : '');
+}
 function renderPanel(){
   if (panelUrl){ URL.revokeObjectURL(panelUrl); panelUrl = null; }
   const p = $('#panel');
@@ -540,8 +554,7 @@ function renderPanel(){
     '<label class="f"><span>tags</span><input id="fTags" type="text" value="' + esc((t.tags || []).join(', ')) + '" placeholder="riff, dark"></label>' +
     '<label class="keep"><input id="fKeep" type="checkbox" ' + (t.keep ? 'checked' : '') + '><span>keep</span></label>' +
     '<label class="f grow"><span>notes</span><textarea id="fNotes" rows="2">' + esc(t.notes) + '</textarea></label>' +
-    '<div class="pmeta">' + esc(t.recordedAt.replace('T', ' ').slice(0, 19)) + '<br>' +
-      fmtClock(t.duration) + ' · starts ' + fmtClock(t.start) + '</div>' +
+    '<div class="pmeta">' + pmetaHTML(t) + '</div>' +
     '<button id="fDelete" class="danger">delete</button>' +
     (t.kind === 'video' ? '<video id="fVid" controls playsinline></video>' : '');
   if (t.kind === 'video'){ panelUrl = URL.createObjectURL(t.blob); $('#fVid').src = panelUrl; }
@@ -797,6 +810,8 @@ function takeMarkdown(t, mediaName){
   y.push('recorded: ' + q(t.recordedAt));
   if (t.bpm) y.push('bpm: ' + t.bpm);
   if (t.key) y.push('key: ' + q(t.key));
+  const bp = barPos(t.start);
+  if (bp) y.push('bar_beat: ' + bp);
   if (t.keep) y.push('keep: true');
   if (t.tags && t.tags.length) y.push('tags: [' + t.tags.map(q).join(', ') + ']');
   y.push('---', '');
@@ -817,6 +832,8 @@ function sessionMarkdown(entries){
   y.push('---', '', '');
   for (const e of entries){
     const t = e.t, bits = [fmtClock(t.start) + '–' + fmtClock(t.start + t.duration)];
+    const bp = barPos(t.start), bpe = barPos(t.start + t.duration);
+    if (bp) bits.push((bpe && bpe !== bp ? bp + '–' + bpe : 'bar ' + bp));
     if (t.bpm) bits.push(t.bpm + ' bpm');
     if (t.key) bits.push(t.key);
     if (t.keep) bits.push('keep');
@@ -939,6 +956,13 @@ function renderChips(){
   if (b) b.querySelector('.cv').textContent = state.session.bpm ? state.session.bpm + ' bpm' : '';
   if (k) k.querySelector('.cv').textContent = state.session.key || '';
 }
+// session bpm changed: bar positions & metadata readouts shift — refresh visible text
+function onBpmChange(){
+  const t = takeById(state.selectedId);
+  if (t && t.el) updateBarText(t);
+  const pm = $('#panel .pmeta');
+  if (t && pm) pm.innerHTML = pmetaHTML(t);
+}
 function wireChip(chip, commit){
   const fld = chip.querySelector('.fld');
   const close = () => {
@@ -971,7 +995,10 @@ function wire(){
   $('#zipBtn').addEventListener('click', exportZip);
   $('#newBtn').addEventListener('click', newSession);
   $('#sessionName').addEventListener('input', e => { state.session.name = e.target.value; saveSessionMeta(); });
-  wireChip($('#bpmChip'), v => { state.session.bpm = v === '' ? null : (parseFloat(v) || null); saveSessionMeta(); });
+  wireChip($('#bpmChip'), v => {
+    state.session.bpm = v === '' ? null : (parseFloat(v) || null);
+    saveSessionMeta(); onBpmChange();
+  });
   wireChip($('#keyChip'), v => { state.session.key = v.trim(); saveSessionMeta(); });
 
   // scrub-seek on the ruler and empty timeline space; a click (no drag) deselects
