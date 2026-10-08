@@ -46,4 +46,14 @@ No server, no account, no upload. Takes live in this browser's IndexedDB. "new" 
 
 ## Tech
 
-One `index.html`. No build step, no dependencies. Works in any modern browser with `MediaRecorder` (Chrome/Edge for the directory export; the zip fallback covers the rest).
+One `index.html`. No build step, no runtime dependencies. Works in any modern browser with `MediaRecorder` (Chrome/Edge for the directory export; the zip fallback covers the rest).
+
+## House style
+
+The code follows the [37signals house style](https://github.com/basecamp/house-style) — enforced, not aspirational:
+
+- **JS** — `@37signals/eslint-config` (double quotes, no semicolons, 2-space indent, spaced array brackets)
+- **CSS** — `@37signals/stylelint-config-scss`
+- **HTML** — `html-validate` with the standard preset
+
+`npm run lint` checks everything: the inline `<style>`/`<script>` blocks are extracted into `build/`, linted under the house rules, and `npm run lint:fix` splices the fixes straight back into `index.html`. Dev tooling only — the app still ships as a single dependency-free file.

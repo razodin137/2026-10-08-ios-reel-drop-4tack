@@ -1,2 +1,5 @@
 # user generated content — exported sessions / takes
 /content/
+# lint tooling
+/node_modules/
+/build/

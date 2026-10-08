@@ -6,324 +6,552 @@
 <meta name="color-scheme" content="dark">
 <title>Rough Cut — press record, decide later</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23ff4b4b'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230e0f12'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap" rel="stylesheet">
 <style>
-/* Hallmark · component: studio tool · genre: terminal/utilitarian · theme: graphite + signal red
- * states: default · hover · focus-visible · active · disabled · recording · playing · empty */
+/* Hallmark · component: app shell (studio tool) · genre: brutalist/utilitarian · theme: graphite + signal red
+ * pre-emit critique: P5 H4 E4 S4 R4 V4 · redesign: de-slop · display: Archivo Black
+ * states: default · hover · focus-visible · active · disabled · loading · error · success · recording · playing · empty
+ * contrast: pass (40-41) · tokens: pass (48) · responsive: pass (34,49-52) · icons: none (typography only) */
 :root{
   --bg: oklch(15% 0.008 260);
-  --panel: oklch(18% 0.01 260);
-  --panel-2: oklch(22% 0.012 260);
-  --line: oklch(30% 0.012 260);
+  --panel: oklch(19% 0.01 260);
+  --panel-2: oklch(23% 0.013 260);
+  --line: oklch(40% 0.015 260);
+  --line-soft: oklch(30% 0.012 260);
   --ink: oklch(93% 0.004 260);
-  --ink-dim: oklch(64% 0.01 260);
+  --ink-dim: oklch(67% 0.01 260);
   --accent: oklch(64% 0.21 27);
+  --accent-btn: oklch(57% 0.2 27);
+  --accent-ink: oklch(97% 0.01 27);
   --accent-dim: oklch(64% 0.21 27 / .35);
-  --danger: oklch(64% 0.19 27);
+  --danger: oklch(60% 0.2 27);
+  --shadow-ink: oklch(7% 0.008 260);
+  --font-display: "Archivo Black", system-ui, sans-serif;
   --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
-  --r: 6px;
-  --ease: cubic-bezier(.2,.7,.3,1);
+  --bd: 2px;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.7, 0, .84, 0);
+  --dur-micro: 120ms; --dur-short: 200ms; --dur-long: 320ms;
+  --z-playhead: 8; --z-ruler: 6; --z-cues: 7; --z-cam: 20; --z-ovl: 40; --z-toast: 60;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
+html{overflow:clip}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font:13px/1.45 var(--font-ui);
-  display:flex; flex-direction:column; overflow:hidden;
+  font:13px/1.5 var(--font-ui);
+  overflow:clip;
   -webkit-user-select:none; user-select:none;
 }
 button{
-  font:inherit; color:var(--ink); background:var(--panel-2);
-  border:1px solid var(--line); border-radius:var(--r);
-  padding:5px 10px; cursor:pointer;
+  font:700 12px var(--font-ui);
+  text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;
+  color:var(--ink); background:var(--panel-2);
+  border:var(--bd) solid var(--line);
+  padding:9px 14px; cursor:pointer;
+  transition:transform var(--dur-micro) var(--ease-out),
+             box-shadow var(--dur-micro) var(--ease-out),
+             background-color var(--dur-micro) var(--ease-out),
+             border-color var(--dur-micro) var(--ease-out);
 }
-button:hover{background:oklch(26% 0.014 260)}
-button:active{transform:translateY(1px)}
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
-  outline:2px solid var(--ink); outline-offset:1px;
+@media (hover:hover){
+  button:hover{border-color:var(--ink)}
 }
+button:active{transform:translate(1px,1px)}
+button:disabled{opacity:.45; cursor:not-allowed}
 input[type=text], input[type=number], textarea{
-  font:inherit; color:var(--ink); background:var(--panel-2);
-  border:1px solid var(--line); border-radius:var(--r); padding:5px 8px;
+  font:13px/1.5 var(--font-ui); color:var(--ink); background:var(--bg);
+  border:var(--bd) solid var(--line); padding:var(--s2) var(--s3); border-radius:0;
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+[tabindex]:focus-visible{
+  outline:var(--bd) solid var(--ink); outline-offset:2px;
+}
+@media (hover:hover){
+  input[type=text]:hover, input[type=number]:hover, textarea:hover{border-color:var(--ink-dim)}
 }
 input::placeholder, textarea::placeholder{color:var(--ink-dim)}
+/* hard-shadow press — the brutalist signature; the button physically presses into its shadow */
+.hs{box-shadow:4px 4px 0 0 var(--shadow-ink)}
+@media (hover:hover){
+  .hs:hover{box-shadow:5px 5px 0 0 var(--shadow-ink); transform:translate(-1px,-1px)}
+}
+.hs:active{box-shadow:0 0 0 0 var(--shadow-ink); transform:translate(4px,4px)}
+.hs:disabled{box-shadow:2px 2px 0 0 var(--shadow-ink); transform:none}
 
-/* ---------- toolbar ---------- */
+/* ---------- masthead: title left, burger right ---------- */
 #top{
-  display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
-  gap:var(--s2) var(--s3);
-  padding:var(--s2) var(--s4);
-  background:var(--panel); border-bottom:1px solid var(--line);
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center;
+  gap:var(--s3); min-height:68px; padding:var(--s2) var(--s4);
+  background:var(--panel); border-bottom:var(--bd) solid var(--line);
 }
-.tg{display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; min-width:0}
-.t-right{justify-content:flex-end}
-#recBtn{
-  width:42px; height:42px; border-radius:50%;
-  background:var(--accent); border:none; position:relative; flex:none;
-  transition:transform .12s var(--ease);
+#masthead{
+  display:flex; align-items:baseline; flex-wrap:wrap;
+  gap:var(--s1) var(--s3); min-width:0; cursor:pointer;
 }
-#recBtn::after{
-  content:''; position:absolute; inset:13px; border-radius:50%;
-  background:var(--bg); transition:border-radius .12s var(--ease);
+#mastTitle{
+  margin:0; font:400 clamp(20px, 4.5vw, 30px) / 1.05 var(--font-display);
+  letter-spacing:.01em; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:100%; min-width:0;
 }
-#recBtn:hover{transform:scale(1.05)}
-#recBtn:active{transform:scale(.96)}
-body.recording #recBtn::after{border-radius:3px}
-body.recording #recBtn{animation:pulse 1.5s infinite}
-@keyframes pulse{50%{box-shadow:0 0 0 9px var(--accent-dim)}}
-@media (prefers-reduced-motion: reduce){
-  body.recording #recBtn{animation:none}
-  *{transition:none !important}
+#mastTitle:empty::before{content:'untitled session'; color:var(--ink-dim); font-weight:400}
+body.renaming #mastTitle{display:none}
+#titleEdit{
+  font:400 clamp(20px, 4.5vw, 30px) / 1.05 var(--font-display);
+  padding:2px var(--s2); min-width:min(320px, 100%); flex:0 1 auto;
 }
+.m-chip{
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  letter-spacing:.12em; white-space:nowrap;
+}
+.m-chip b{color:var(--ink); font-weight:700}
+#burger{
+  width:48px; height:48px; padding:0; flex:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  background:var(--panel-2);
+}
+#burger span{
+  display:block; width:22px; height:3px; background:var(--ink);
+  transition:transform var(--dur-short) var(--ease-out), opacity var(--dur-short) var(--ease-out);
+}
+body.menu-open #burger span:nth-child(1){transform:translateY(8px) rotate(45deg)}
+body.menu-open #burger span:nth-child(2){opacity:0}
+body.menu-open #burger span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+
+/* ---------- overlays: menu + detail views ---------- */
+.ovl{position:fixed; inset:0; z-index:var(--z-ovl); display:none}
+.ovl.open{display:block}
+.scrim{position:absolute; inset:0; background:oklch(8% 0.008 260 / .62); opacity:0}
+.ovl.open .scrim{animation:scrimIn var(--dur-short) var(--ease-out) forwards}
+.ovl.closing .scrim{animation:scrimOut 140ms var(--ease-in) forwards}
+.panel{
+  position:absolute; top:0; right:0; bottom:0; width:min(360px, 100%);
+  background:var(--panel); border-left:var(--bd) solid var(--line);
+  display:flex; flex-direction:column; overflow-y:auto; overscroll-behavior:contain;
+}
+.ovl.open .panel{animation:panelIn var(--dur-long) var(--ease-out)}
+.ovl.closing .panel{animation:panelOut 160ms var(--ease-in)}
+@keyframes panelIn{from{transform:translateX(24px); opacity:0}}
+@keyframes panelOut{to{transform:translateX(24px); opacity:0}}
+@keyframes scrimIn{to{opacity:1}}
+@keyframes scrimOut{to{opacity:0}}
+
+/* ---------- menu ---------- */
+.m-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3);
+  padding:var(--s4); border-bottom:var(--bd) solid var(--line);
+}
+.wordmark{font:400 19px/1 var(--font-display); text-transform:uppercase; letter-spacing:.02em}
+.m-sub{font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.14em}
+.m-body{padding:var(--s4); display:flex; flex-direction:column; gap:var(--s5)}
+.m-actions{display:flex; flex-direction:column; gap:var(--s3)}
+.bbtn{
+  display:block; width:100%; text-align:left;
+  font:400 15px/1 var(--font-display); text-transform:uppercase; letter-spacing:.08em;
+  padding:var(--s3) var(--s4); background:var(--panel-2);
+}
+.bbtn-primary{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+.bbtn-danger{color:var(--danger); border-color:var(--danger); background:transparent}
+@media (hover:hover){
+  .bbtn-danger:hover{background:var(--danger); color:var(--accent-ink)}
+}
+.m-sec{display:flex; flex-direction:column; gap:var(--s2)}
+.m-lab{margin:0; font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.16em}
+.m-labrow{display:flex; align-items:center; justify-content:space-between}
+.m-clear{
+  display:flex; align-items:center; min-height:44px;
+  font:700 10px var(--font-mono); text-transform:uppercase; letter-spacing:.1em;
+  color:var(--ink-dim); background:transparent; border:none; padding:0 0 0 var(--s3); cursor:pointer;
+}
+@media (hover:hover){
+  .m-clear:hover{color:var(--ink); border-color:transparent}
+}
+.stepper{display:grid; grid-template-columns:56px minmax(0,1fr) 56px}
+.stepper button{height:56px; font:700 20px var(--font-mono); background:var(--panel-2)}
+.stepper output{
+  display:flex; align-items:center; justify-content:center;
+  font:400 30px/1 var(--font-display); font-variant-numeric:tabular-nums;
+  background:var(--bg); border:var(--bd) solid var(--line); border-left:none; border-right:none;
+  padding:0 var(--s2);
+}
+.m-mode{margin:var(--s1) 0 0; font:700 9.5px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.18em}
+.keygrid{display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:var(--s1)}
+.keygrid button{
+  height:44px; padding:0; font:700 11px var(--font-mono); letter-spacing:0; text-transform:none;
+}
+.keygrid button.on{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+.m-notes{width:100%; min-height:104px; resize:vertical; font:13px/1.5 var(--font-ui)}
+.m-foot{
+  margin-top:auto; padding:var(--s3) var(--s4); border-top:var(--bd) solid var(--line);
+  font:11px/1.8 var(--font-mono); color:var(--ink-dim);
+}
+.m-foot b{color:var(--ink); font-weight:700}
+
+/* ---------- detail views: takes & cues ---------- */
+.v-head{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  padding:var(--s2) var(--s2) var(--s2) var(--s4); border-bottom:var(--bd) solid var(--line);
+}
+.v-kicker{font:700 10px var(--font-mono); color:var(--accent); text-transform:uppercase; letter-spacing:.18em}
+.v-close{width:44px; height:44px; font:700 14px var(--font-mono); background:transparent; border-color:transparent}
+@media (hover:hover){
+  .v-close:hover{border-color:var(--line)}
+}
+.v-body{padding:var(--s4); display:flex; flex-direction:column; gap:var(--s4)}
+.v-body label{display:flex; flex-direction:column; gap:var(--s1); min-width:0}
+.v-body textarea{resize:vertical}
+.v-name{
+  font:400 20px/1.15 var(--font-display); letter-spacing:.01em;
+  padding:var(--s2) var(--s3);
+}
+.v-meta{
+  font:11px/1.8 var(--font-mono); color:var(--ink-dim);
+  border-top:var(--bd) solid var(--line-soft); padding-top:var(--s2);
+}
+.v-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s3)}
+.v-span{grid-column:1 / -1}
+.f-lab{font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.16em}
+.v-keep{
+  flex-direction:row; align-items:center; gap:var(--s2); cursor:pointer; width:max-content;
+  font:700 11px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.14em;
+}
+@media (hover:hover){
+  .v-keep:hover{color:var(--ink)}
+}
+.v-keep input{
+  appearance:none; -webkit-appearance:none; width:22px; height:22px; margin:0; flex:none;
+  border:var(--bd) solid var(--line); background:var(--bg); cursor:pointer;
+  display:grid; place-items:center;
+}
+.v-keep input:checked{background:var(--accent-btn); border-color:var(--shadow-ink)}
+.v-keep input:checked::after{content:''; width:10px; height:10px; background:var(--accent-ink)}
+.v-body input:not([type="checkbox"]), .v-body textarea{width:100%; min-width:0}
+.v-vid{width:100%; max-height:220px; background:var(--shadow-ink); border:var(--bd) solid var(--line)}
+.v-del{align-self:flex-start; color:var(--danger); border-color:var(--danger); background:transparent}
+@media (hover:hover){
+  .v-del:hover{background:var(--danger); color:var(--accent-ink)}
+}
+
+/* ---------- timeline ---------- */
+#app{display:grid; height:100dvh; grid-template-rows:auto minmax(0,1fr) auto}
+#tl{overflow:auto; position:relative; background:var(--bg); min-height:0}
+#rulerWrap{
+  position:sticky; top:0; left:0; z-index:var(--z-ruler);
+  height:34px; background:var(--panel);
+  border-bottom:var(--bd) solid var(--line); cursor:crosshair;
+}
+#ruler{display:block}
+#cues{position:absolute; top:0; left:0; right:0; height:34px; z-index:var(--z-cues); pointer-events:none}
+.cue{
+  position:absolute; top:0; width:16px; height:100%; margin-left:-8px;
+  pointer-events:auto; cursor:grab; touch-action:none;
+}
+.cue::before{
+  content:''; position:absolute; left:7px; top:18px; bottom:0; width:var(--bd);
+  background:var(--ink-dim);
+}
+.cue::after{
+  content:''; position:absolute; left:3px; top:3px; width:12px; height:12px;
+  background:var(--panel); border:var(--bd) solid var(--ink-dim);
+  transform:rotate(45deg);
+}
+@media (hover:hover){
+  .cue:hover::before{background:var(--ink)}
+  .cue:hover::after{border-color:var(--ink)}
+}
+.cue.selected::before{background:var(--accent)}
+.cue.selected::after{background:var(--accent); border-color:var(--accent)}
+#lanes{position:absolute; top:0; left:0; right:0; bottom:0}
+.bar{
+  position:absolute; height:54px; border-radius:0;
+  background:color-mix(in oklab, var(--lane) 16%, var(--bg));
+  border:var(--bd) solid color-mix(in oklab, var(--lane) 55%, var(--line-soft));
+  cursor:grab; overflow:hidden; touch-action:none;
+}
+@media (hover:hover){
+  .bar:hover{background:color-mix(in oklab, var(--lane) 28%, var(--bg))}
+}
+.bar.selected{
+  outline:var(--bd) solid var(--ink); outline-offset:-2px;
+  box-shadow:4px 4px 0 0 var(--shadow-ink);
+}
+.bar .wave{position:absolute; inset:0; width:100%; height:100%; opacity:.9}
+.bar .tname{
+  position:absolute; left:var(--s2); top:4px; right:var(--s2);
+  font:400 11px/1.3 var(--font-display); letter-spacing:.03em;
+  color:oklch(97% 0.01 var(--lane-h, 260));
+  text-shadow:0 1px 0 var(--shadow-ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.bar .tmeta{
+  position:absolute; left:var(--s2); bottom:4px; right:var(--s2);
+  font:10.5px/1.3 var(--font-mono);
+  color:oklch(86% 0.01 var(--lane-h, 260) / .9);
+  text-shadow:0 1px 0 var(--shadow-ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.bar .tdur{
+  position:absolute; right:var(--s2); top:4px;
+  font:700 10.5px var(--font-mono); font-variant-numeric:tabular-nums;
+  color:oklch(86% 0.01 var(--lane-h, 260) / .9);
+  text-shadow:0 1px 0 var(--shadow-ink);
+}
+#playhead{
+  position:absolute; top:0; bottom:0; width:var(--bd);
+  background:var(--accent); z-index:var(--z-playhead); pointer-events:none;
+}
+#playhead::before{
+  content:''; position:absolute; top:0; left:-5px;
+  width:12px; height:7px; background:var(--accent);
+  clip-path:polygon(0 0, 100% 0, 50% 100%);
+}
+#empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font:700 12px var(--font-mono); text-transform:uppercase; letter-spacing:.14em;
+  color:var(--ink-dim); text-align:center; padding:var(--s4); pointer-events:none;
+}
+
+/* ---------- bottom bar: transport + record ---------- */
+#bottomBar{
+  display:flex; align-items:center; gap:var(--s2);
+  padding:var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-bottom));
+  background:var(--panel); border-top:var(--bd) solid var(--line);
+}
+.tgroup{display:flex; align-items:center; gap:var(--s2); min-width:0; flex:1}
+.spacer{flex:1}
 #playBtn{
-  width:34px; height:34px; border-radius:50%;
-  position:relative; flex:none; padding:0;
+  width:44px; height:44px; padding:0; position:relative; flex:none; background:var(--panel-2);
 }
 #playBtn .tri{
-  position:absolute; left:13px; top:10px;
-  border-style:solid; border-width:6px 0 6px 10px;
+  position:absolute; left:17px; top:13px;
+  border-style:solid; border-width:9px 0 9px 14px;
   border-color:transparent transparent transparent var(--ink);
 }
 #playBtn .bars{display:none}
 body.playing #playBtn .tri{display:none}
 body.playing #playBtn .bars{display:block}
 body.playing #playBtn .bars::before, body.playing #playBtn .bars::after{
-  content:''; position:absolute; top:10px; bottom:10px; width:4px;
-  background:var(--ink); border-radius:1px;
+  content:''; position:absolute; top:13px; bottom:13px; width:5px;
+  background:var(--ink);
 }
-body.playing #playBtn .bars::before{left:11px}
-body.playing #playBtn .bars::after{right:11px}
+body.playing #playBtn .bars::before{left:14px}
+body.playing #playBtn .bars::after{right:14px}
 #time{
-  font:12.5px var(--font-mono); color:var(--ink-dim);
-  min-width:86px; flex:none; letter-spacing:.02em;
+  font:700 13px var(--font-mono); font-variant-numeric:tabular-nums; letter-spacing:.02em;
+  color:var(--ink); min-width:88px; flex:none;
 }
 body.recording #time{color:var(--accent)}
 #meter{
-  width:84px; height:5px; background:var(--panel-2);
-  border-radius:2px; overflow:hidden; display:none; flex:none;
+  width:84px; height:14px; flex:none;
+  background:var(--bg); border:var(--bd) solid var(--line);
+  display:none; overflow:hidden;
 }
 body.recording #meter{display:block}
 #meterFill{
   height:100%; width:100%; background:var(--accent);
-  transform:scaleX(var(--lvl,0)); transform-origin:left;
+  transform:scaleX(var(--lvl, 0)); transform-origin:left;
 }
-#sessionName{width:190px}
-.chip{
-  display:flex; align-items:center; gap:5px;
-  font-size:12px; color:var(--ink-dim);
-  background:var(--panel-2); border:1px solid var(--line);
-  border-radius:var(--r); padding:4px 9px; cursor:pointer; flex:none;
+#zoomOut, #zoomIn{width:44px; height:44px; padding:0; font:700 16px var(--font-mono); flex:none}
+.rgroup{display:flex; align-items:center; gap:var(--s2); flex:none}
+#vidChip{
+  display:flex; align-items:center; gap:var(--s2); height:44px; padding:0 var(--s3);
+  border:var(--bd) solid var(--line); background:var(--panel-2); cursor:pointer;
+  font:700 10px var(--font-mono); text-transform:uppercase; letter-spacing:.14em; color:var(--ink-dim);
 }
-.chip:hover{color:var(--ink)}
-.chip input[type=checkbox]{accent-color:var(--accent)}
-.chip .cv{font-weight:600; color:var(--ink)}
-.chip.edit .cv{display:none}
-.chip .fld{
-  display:none; width:0; padding:0; border:none; background:transparent;
-  font:12px var(--font-ui); color:var(--ink);
+@media (hover:hover){
+  #vidChip:hover{border-color:var(--ink)}
 }
-.chip.edit .fld{display:block; width:62px; padding:0 2px}
-.chip.edit{border-color:var(--ink-dim)}
-#zoomOut,#zoomIn{width:32px; padding:5px 0; flex:none}
-#zipBtn,#newBtn{font-size:12px; color:var(--ink-dim)}
-
-/* ---------- timeline ---------- */
-#tl{flex:1; overflow:auto; position:relative; background:var(--bg)}
-#content{position:relative}
-#rulerWrap{
-  position:sticky; top:0; left:0; z-index:6;
-  height:30px; background:var(--panel);
-  border-bottom:1px solid var(--line); cursor:crosshair;
+#vidChip input{
+  appearance:none; -webkit-appearance:none; width:18px; height:18px; margin:0; flex:none;
+  border:var(--bd) solid var(--line); background:var(--bg); cursor:pointer;
+  display:grid; place-items:center;
 }
-#ruler{display:block}
-#lanes{position:absolute; top:0; left:0; right:0; bottom:0}
-.bar{
-  position:absolute; height:50px; border-radius:var(--r);
-  background:color-mix(in oklab, var(--lane) 24%, var(--panel));
-  border:1px solid color-mix(in oklab, var(--lane) 55%, var(--line));
-  cursor:grab; overflow:hidden; touch-action:none;
+#vidChip input:checked{background:var(--accent-btn); border-color:var(--shadow-ink)}
+#vidChip input:checked::after{content:''; width:8px; height:8px; background:var(--accent-ink)}
+#recBtn{
+  height:56px; min-width:148px; padding:0 var(--s4);
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  background:var(--accent); color:var(--accent-ink); border-color:var(--shadow-ink);
+  font:400 19px/1 var(--font-display); text-transform:uppercase; letter-spacing:.2em;
 }
-.bar:hover{background:color-mix(in oklab, var(--lane) 32%, var(--panel))}
-.bar.selected{outline:2px solid var(--ink); outline-offset:-1px}
-.bar .wave{position:absolute; inset:0; width:100%; height:100%; opacity:.9}
-.bar .tname{
-  position:absolute; left:8px; top:4px; font-weight:600; font-size:12px;
-  color:oklch(97% 0.01 var(--lane-h,260));
-  text-shadow:0 1px 2px oklch(10% 0.01 260 / .8);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; right:8px;
+#recBtn .dot{
+  width:12px; height:12px; background:currentColor; border-radius:50%; flex:none;
+  transition:border-radius var(--dur-micro) var(--ease-out);
 }
-.bar .tmeta{
-  position:absolute; left:8px; bottom:4px; font-size:10.5px;
-  color:oklch(88% 0.01 var(--lane-h,260) / .85);
-  text-shadow:0 1px 2px oklch(10% 0.01 260 / .8);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; right:8px;
-}
-.bar .tdur{
-  position:absolute; right:8px; top:4px; font:10.5px var(--font-mono);
-  color:oklch(88% 0.01 var(--lane-h,260) / .8);
-  text-shadow:0 1px 2px oklch(10% 0.01 260 / .8);
-}
-#playhead{
-  position:absolute; top:0; bottom:0; width:2px;
-  background:var(--accent); z-index:5; pointer-events:none;
-}
-
-/* ---------- cues ---------- */
-#cues{position:absolute; top:0; left:0; right:0; height:30px; z-index:7; pointer-events:none}
-.cue{
-  position:absolute; top:0; width:14px; height:100%; margin-left:-7px;
-  pointer-events:auto; cursor:grab; touch-action:none;
-}
-.cue::before{
-  content:''; position:absolute; left:6px; top:13px; bottom:0; width:2px;
-  background:var(--ink-dim);
-}
-.cue::after{
-  content:''; position:absolute; left:2px; top:2px; width:10px; height:10px;
-  border-radius:2px; background:var(--panel-2); border:2px solid var(--ink-dim);
-  transform:rotate(45deg); box-sizing:border-box;
-}
-.cue:hover::before{background:var(--ink)}
-.cue:hover::after{border-color:var(--ink)}
-.cue.selected::before{background:var(--accent)}
-.cue.selected::after{border-color:var(--accent); background:var(--accent)}
-#empty{
-  position:absolute; inset:0; display:flex;
-  align-items:center; justify-content:center;
-  color:var(--ink-dim); font-size:14px; pointer-events:none;
-}
-
-/* ---------- metadata panel ---------- */
-#panel{
-  border-top:1px solid var(--line); background:var(--panel);
-  padding:var(--s3) var(--s4); min-height:74px;
-  display:flex; gap:var(--s3); align-items:flex-start; flex-wrap:wrap;
-}
-#panel .f{display:flex; flex-direction:column; gap:3px; flex:none}
-#panel .f span{font-size:10.5px; color:var(--ink-dim); letter-spacing:.04em}
-#panel .grow{flex:1; min-width:220px}
-#panel textarea{resize:vertical; min-height:38px}
-#panel .keep{flex-direction:row; align-items:center; gap:6px; padding-top:14px; cursor:pointer}
-#panel .keep input{accent-color:var(--accent); width:15px; height:15px}
-#panel .keep span{font-size:12px}
-.pmeta{
-  font:10.5px var(--font-mono); color:var(--ink-dim);
-  padding-top:16px; max-width:210px;
-}
-#fDelete{border-color:oklch(30% 0.06 27); color:var(--danger)}
-#fDelete:hover{background:oklch(64% 0.19 27 / .15)}
-#fVid{
-  width:200px; max-height:112px; background:#000;
-  border-radius:var(--r); border:1px solid var(--line);
-}
-#panel.empty{color:var(--ink-dim); font-size:12.5px; align-items:center; min-height:52px}
-#panel.cue-mode{align-items:flex-start}
-#sessionNotes{
-  flex:1; min-width:200px; border:none; background:transparent;
-  font:13px/1.45 var(--font-ui); color:var(--ink-dim); resize:none;
-}
-#sessionNotes:focus{color:var(--ink)}
-#panel .slabel{font-size:10.5px; color:var(--ink-dim); letter-spacing:.04em}
+body.recording #recBtn .dot{border-radius:2px}
+body.recording #recBtn{animation:recPulse 1.4s infinite}
+@keyframes recPulse{50%{box-shadow:4px 4px 0 0 var(--shadow-ink), 0 0 0 8px var(--accent-dim)}}
 
 /* ---------- misc ---------- */
 #camPreview{
-  position:fixed; right:var(--s4); bottom:110px; width:190px;
-  border-radius:var(--r); border:1px solid var(--line);
-  background:#000; z-index:20;
+  position:fixed; right:var(--s4); bottom:104px; width:200px;
+  border:var(--bd) solid var(--line); background:var(--shadow-ink); z-index:var(--z-cam);
 }
 .hidden{display:none !important}
 #toast{
-  position:fixed; left:50%; bottom:90px; transform:translateX(-50%);
-  background:var(--panel-2); border:1px solid var(--line);
-  color:var(--ink); border-radius:var(--r);
-  padding:8px 14px; font-size:12.5px; z-index:30;
+  position:fixed; left:50%; bottom:96px; transform:translateX(-50%);
+  background:var(--panel-2); border:var(--bd) solid var(--ink);
+  color:var(--ink); padding:var(--s3) var(--s4); font:12.5px/1.4 var(--font-ui);
+  box-shadow:4px 4px 0 0 var(--shadow-ink);
+  z-index:var(--z-toast); max-width:min(420px, calc(100vw - 32px));
   opacity:0; pointer-events:none;
-  transition:opacity .25s var(--ease);
+  transition:opacity var(--dur-short) var(--ease-out);
 }
 #toast.show{opacity:1}
 .tl-video{position:fixed; left:-9999px; top:0; width:2px; height:2px}
+
+/* ---------- responsive ---------- */
+@media (max-width: 560px){
+  #top{min-height:60px; padding:var(--s2) var(--s3)}
+  #bottomBar{flex-wrap:wrap; row-gap:var(--s2); padding:var(--s2) var(--s3)}
+  .rgroup{flex:1 1 100%}
+  #recBtn{flex:1; min-width:0}
+  #time{min-width:74px}
+  #meter{width:56px}
+  #toast{bottom:150px}
+  #camPreview{bottom:160px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
+  body.recording #recBtn{animation:none}
+}
 </style>
 </head>
 <body>
 
+<div id="app">
+
 <header id="top">
-  <div class="tg t-left">
-    <button id="playBtn" title="Play / pause (Space)" aria-label="Play">
-      <span class="tri"></span><span class="bars"></span>
-    </button>
-    <span id="time">0:00.0</span>
-    <div id="meter"><div id="meterFill"></div></div>
+  <div id="masthead" title="click to rename">
+    <h1 id="mastTitle" tabindex="0"></h1>
+    <span class="m-chip" id="mastBpm"></span>
+    <span class="m-chip" id="mastKey"></span>
   </div>
-  <div class="tg t-center">
-    <label class="chip" id="vidChip" title="Record video too"><input id="videoChk" type="checkbox"> video</label>
-    <button id="recBtn" title="Record (R)" aria-label="Record"></button>
-    <input id="sessionName" type="text" placeholder="untitled session" aria-label="Session name">
-    <div class="chip" id="bpmChip" role="button" tabindex="0" title="Session bpm">
-      <span class="lb">bpm</span><span class="cv"></span><input class="fld" type="number" min="0" step="any" placeholder="—" aria-label="Session bpm">
-    </div>
-    <div class="chip" id="keyChip" role="button" tabindex="0" title="Session key">
-      <span class="lb">key</span><span class="cv"></span><input class="fld" type="text" placeholder="—" aria-label="Session key">
-    </div>
-  </div>
-  <div class="tg t-right">
-    <button id="zoomOut" title="Zoom out">−</button>
-    <button id="zoomIn" title="Zoom in">+</button>
-    <button id="exportBtn" title="Export takes as markdown + media into a folder">export</button>
-    <button id="zipBtn" title="Download everything as one .zip">zip</button>
-    <button id="newBtn" title="Delete all takes, start fresh">new</button>
-  </div>
+  <button id="burger" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
 </header>
 
 <main id="tl">
   <div id="content">
-    <div id="rulerWrap"><canvas id="ruler"></canvas></div>
+    <div id="rulerWrap"><canvas id="ruler" aria-hidden="true"></canvas></div>
     <div id="cues"></div>
     <div id="lanes"></div>
-    <div id="playhead"></div>
+    <div id="playhead" aria-hidden="true"></div>
     <div id="empty">press record — everything else can wait</div>
   </div>
 </main>
 
-<footer id="panel" class="empty"></footer>
+<footer id="bottomBar">
+  <div class="tgroup">
+    <button id="playBtn" title="Play / pause (Space)" aria-label="Play"><span class="tri"></span><span class="bars"></span></button>
+    <span id="time">0:00.0</span>
+    <div id="meter" aria-hidden="true"><div id="meterFill"></div></div>
+    <span class="spacer"></span>
+    <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+    <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+  </div>
+  <div class="rgroup">
+    <label id="vidChip" title="Record video too"><input id="videoChk" type="checkbox"><span>vid</span></label>
+    <button id="recBtn" class="hs" title="Record / stop (R)"><span class="dot"></span><span id="recLabel">rec</span></button>
+  </div>
+</footer>
+
+</div>
+
+<div class="ovl" id="menuOvl">
+  <div class="scrim" data-close="menu"></div>
+  <aside class="panel" role="dialog" aria-modal="true" aria-label="Session menu" id="menuPanel" tabindex="-1">
+    <header class="m-head">
+      <span class="wordmark">Rough Cut</span>
+      <span class="m-sub">the anti-DAW</span>
+    </header>
+    <div class="m-body">
+      <div class="m-actions">
+        <button class="bbtn bbtn-primary hs" id="mExport">export</button>
+        <button class="bbtn hs" id="mZip">zip</button>
+        <button class="bbtn bbtn-danger hs" id="mNew">new</button>
+      </div>
+      <section class="m-sec">
+        <div class="m-labrow"><h2 class="m-lab">bpm</h2><button class="m-clear" id="bpmClear">clear</button></div>
+        <div class="stepper">
+          <button id="bpmDown" aria-label="Decrease BPM">−</button>
+          <output id="bpmVal">—</output>
+          <button id="bpmUp" aria-label="Increase BPM">+</button>
+        </div>
+      </section>
+      <section class="m-sec">
+        <div class="m-labrow"><h2 class="m-lab">key</h2><button class="m-clear" id="keyClear">none</button></div>
+        <h3 class="m-mode">major</h3>
+        <div class="keygrid" id="keyMajor"></div>
+        <h3 class="m-mode">minor</h3>
+        <div class="keygrid" id="keyMinor"></div>
+      </section>
+      <section class="m-sec">
+        <h2 class="m-lab">notes</h2>
+        <textarea id="mNotes" class="m-notes" rows="4" placeholder="what is this session about?"></textarea>
+      </section>
+    </div>
+    <footer class="m-foot">
+      <b>R</b> record · <b>space</b> play<br>
+      double-click the ruler to add a cue<br>
+      click a take for details · drag to retime
+    </footer>
+  </aside>
+</div>
+
+<div class="ovl" id="viewOvl">
+  <div class="scrim" data-close="view"></div>
+  <aside class="panel" role="dialog" aria-modal="true" aria-label="Details" id="viewPanel" tabindex="-1">
+    <header class="v-head">
+      <span class="v-kicker" id="vKicker">take</span>
+      <button class="v-close" data-close="view" aria-label="Close">✕</button>
+    </header>
+    <div class="v-body" id="vBody"></div>
+  </aside>
+</div>
 
 <video id="camPreview" class="hidden" muted autoplay playsinline></video>
 <div id="toast" role="status"></div>
 
 <script>
-'use strict';
+"use strict"
 /* Rough Cut — a rough-timeline idea recorder. The anti-DAW: press record first,
  * name/bpm/key/tags/notes whenever you feel like it, export as markdown + media. */
 
 /* ---------- tiny helpers ---------- */
-const $ = s => document.querySelector(s);
-const el = (t, cls) => { const e = document.createElement(t); if (cls) e.className = cls; return e; };
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const q = s => JSON.stringify(String(s));           // JSON string = valid YAML scalar
-const isoNow = () => new Date().toISOString();
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id' + Math.random().toString(36).slice(2));
-const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'take';
-const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-const fmtTime = s => { s = Math.max(0, s); const m = Math.floor(s / 60), ss = s - m * 60;
-  return m + ':' + String(Math.floor(ss)).padStart(2, '0') + '.' + Math.floor((ss % 1) * 10); };
-const fmtClock = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+const $ = s => document.querySelector(s)
+const el = (t, cls) => { const e = document.createElement(t); if (cls) e.className = cls; return e }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]))
+const q = s => JSON.stringify(String(s))           // JSON string = valid YAML scalar
+const isoNow = () => new Date().toISOString()
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id" + Math.random().toString(36).slice(2))
+const slug = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "take"
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) } }
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
+const fmtTime = s => { s = Math.max(0, s); const m = Math.floor(s / 60), ss = s - m * 60
+  return m + ":" + String(Math.floor(ss)).padStart(2, "0") + "." + Math.floor((ss % 1) * 10) }
+const fmtClock = s => { s = Math.max(0, s); return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") }
 // bar.beat.tenths position (4/4) from timeline seconds + session bpm; null if no session bpm
 const barPos = sec => {
-  const bpm = state.session.bpm;
-  if (!bpm) return null;
-  const beats = Math.round(sec * bpm / 60 * 10) / 10;   // nearest tenth of a beat
-  return (Math.floor(beats / 4) + 1) + '.' + (Math.floor(beats % 4) + 1) + '.' + Math.round((beats % 1) * 10);
-};
+  const bpm = state.session.bpm
+  if (!bpm) return null
+  const beats = Math.round(sec * bpm / 60 * 10) / 10   // nearest tenth of a beat
+  return (Math.floor(beats / 4) + 1) + "." + (Math.floor(beats % 4) + 1) + "." + Math.round((beats % 1) * 10)
+}
 
 /* ---------- constants & state ---------- */
-const RULERH = 30, ROWH = 62, BARH = 50;
+const RULERH = 34, ROWH = 68, BARH = 54
 const LANES = [ // muted, distinguishable hues (oklch hue angles)
-  { h: 230, c: '#7fa3c4' }, { h: 130, c: '#93bd85' }, { h: 75,  c: '#c4b07f' },
-  { h: 300, c: '#b08fc4' }, { h: 350, c: '#c48f9f' }, { h: 180, c: '#7fc4bd' },
-];
+  { h: 230, c: "oklch(72% 0.09 230)" }, { h: 130, c: "oklch(72% 0.1 130)" }, { h: 85,  c: "oklch(76% 0.1 85)" },
+  { h: 300, c: "oklch(72% 0.1 300)" }, { h: 350, c: "oklch(72% 0.09 350)" }, { h: 180, c: "oklch(72% 0.09 180)" }
+]
 const state = {
-  session: { name: '', bpm: null, key: '', notes: '', created: isoNow() },
+  session: { name: "", bpm: null, key: "", notes: "", created: isoNow() },
   takes: [],            // {id,name,kind,start,duration,recordedAt,bpm,key,tags,notes,keep,mime,ext,blob,buffer,peaks,lane}
   cues: [],             // {id,pos,name,notes}
   selectedId: null,
@@ -331,931 +559,1091 @@ const state = {
   playhead: 0,
   zoom: 40,             // px per second
   playing: false,
-  lanes: 6, contentSec: 120, contentPx: 4800,
-};
-let audioCtx = null;
-let rec = null;         // active recording session
-let panelUrl = null;    // object URL of the video in the metadata panel
-const play = { sources: [], startCtx: 0, startPos: 0, raf: 0, videos: new Map() };
+  lanes: 6, contentSec: 120, contentPx: 4800
+}
+let audioCtx = null
+let rec = null         // active recording session
+let panelUrl = null    // object URL of the video in the metadata panel
+const play = { sources: [], startCtx: 0, startPos: 0, raf: 0, videos: new Map() }
 
-const takeById = id => state.takes.find(t => t.id === id);
-const contentEnd = () => state.takes.reduce((m, t) => Math.max(m, t.start + t.duration), 0);
+const takeById = id => state.takes.find(t => t.id === id)
+const contentEnd = () => state.takes.reduce((m, t) => Math.max(m, t.start + t.duration), 0)
 
-function ensureCtx(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+function ensureCtx(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx }
 
 /* ---------- IndexedDB persistence (blobs included, reload-safe) ---------- */
-let db = null;
+let db = null
 function idbOpen(){
   return new Promise((res, rej) => {
-    const rq = indexedDB.open('rough-cut', 1);
-    rq.onupgradeneeded = () => { rq.result.createObjectStore('takes', { keyPath: 'id' }); rq.result.createObjectStore('meta'); };
-    rq.onsuccess = () => { db = rq.result; res(); };
-    rq.onerror = () => rej(rq.error);
-  });
+    const rq = indexedDB.open("rough-cut", 1)
+    rq.onupgradeneeded = () => { rq.result.createObjectStore("takes", { keyPath: "id" }); rq.result.createObjectStore("meta") }
+    rq.onsuccess = () => { db = rq.result; res() }
+    rq.onerror = () => rej(rq.error)
+  })
 }
 function idbPutTake(t){
-  if (!db) return;
-  const { buffer, peaks, el, _decoding, ...record } = t;   // strip runtime fields
-  try { db.transaction('takes', 'readwrite').objectStore('takes').put(record); } catch (e) {}
+  if (!db) return
+  const record = { ...t }   // copy without runtime fields
+  for (const k of [ "buffer", "peaks", "el", "_decoding" ]) delete record[k]
+  try { db.transaction("takes", "readwrite").objectStore("takes").put(record) } catch (e) { /* ignore */ }
 }
-function idbDelTake(id){ if (!db) return; try { db.transaction('takes', 'readwrite').objectStore('takes').delete(id); } catch (e) {} }
+function idbDelTake(id){ if (!db) return; try { db.transaction("takes", "readwrite").objectStore("takes").delete(id) } catch (e) { /* ignore */ } }
 function idbAllTakes(){
   return new Promise((res, rej) => {
-    if (!db) return res([]);
-    const rq = db.transaction('takes').objectStore('takes').getAll();
-    rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error);
-  });
+    if (!db) return res([])
+    const rq = db.transaction("takes").objectStore("takes").getAll()
+    rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error)
+  })
 }
-function idbSetMeta(k, v){ if (!db) return; try { db.transaction('meta', 'readwrite').objectStore('meta').put(v, k); } catch (e) {} }
+function idbSetMeta(k, v){ if (!db) return; try { db.transaction("meta", "readwrite").objectStore("meta").put(v, k) } catch (e) { /* ignore */ } }
 function idbGetMeta(k){
   return new Promise(res => {
-    if (!db) return res(null);
-    const rq = db.transaction('meta').objectStore('meta').get(k);
-    rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
-  });
+    if (!db) return res(null)
+    const rq = db.transaction("meta").objectStore("meta").get(k)
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null)
+  })
 }
-const saveCues = debounce(() => { if (db) try { db.transaction('meta', 'readwrite').objectStore('meta').put(state.cues, 'cues'); } catch (e) {} }, 300);
+const saveCues = debounce(() => { if (db) try { db.transaction("meta", "readwrite").objectStore("meta").put(state.cues, "cues") } catch (e) { /* ignore */ } }, 300)
 
 /* ---------- toasts ---------- */
-let toastT;
+let toastT
 function toast(msg){
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3200);
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show")
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 3200)
 }
 
 /* ---------- decoding & waveforms ---------- */
 async function ensurePeaks(t){
-  if (t.peaks || t._decoding) return;
-  t._decoding = true;
+  if (t.peaks || t._decoding) return
+  t._decoding = true
   try {
-    ensureCtx();
-    const ab = await t.blob.arrayBuffer();
-    const buf = await audioCtx.decodeAudioData(ab);
-    t.buffer = buf; t.duration = buf.duration;
-    const per = 60, n = Math.max(1, Math.ceil(buf.duration * per)), spc = Math.max(1, Math.floor(buf.sampleRate / per));
-    const peaks = new Float32Array(n), chs = [];
-    for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chs.push(buf.getChannelData(c));
+    ensureCtx()
+    const ab = await t.blob.arrayBuffer()
+    const buf = await audioCtx.decodeAudioData(ab)
+    t.buffer = buf; t.duration = buf.duration
+    const per = 60, n = Math.max(1, Math.ceil(buf.duration * per)), spc = Math.max(1, Math.floor(buf.sampleRate / per))
+    const peaks = new Float32Array(n), chs = []
+    for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chs.push(buf.getChannelData(c))
     for (let i = 0; i < n; i++){
-      let m = 0; const s0 = i * spc, s1 = Math.min(buf.length, s0 + spc);
-      for (const d of chs) for (let s = s0; s < s1; s += 4){ const v = Math.abs(d[s]); if (v > m) m = v; }
-      peaks[i] = m;
+      let m = 0; const s0 = i * spc, s1 = Math.min(buf.length, s0 + spc)
+      for (const d of chs) for (let s = s0; s < s1; s += 4){ const v = Math.abs(d[s]); if (v > m) m = v }
+      peaks[i] = m
     }
-    t.peaks = peaks;
-  } catch (e) { t.decodeFailed = true; }
-  t._decoding = false;
-  idbPutTake(t);          // duration may have been refined
-  scheduleRefresh();
+    t.peaks = peaks
+  } catch (e) { t.decodeFailed = true }
+  t._decoding = false
+  idbPutTake(t)          // duration may have been refined
+  scheduleRefresh()
 }
-const scheduleRefresh = debounce(() => { layout(); renderAll(); }, 60);
+const scheduleRefresh = debounce(() => { layout(); renderAll() }, 60)
 
 /* ---------- timeline layout & render ---------- */
 function layout(){
   // greedy lane packing: each take lands in the first lane with no overlap
-  const sorted = [...state.takes].sort((a, b) => a.start - b.start);
-  const ends = [];
+  const sorted = [ ...state.takes ].sort((a, b) => a.start - b.start)
+  const ends = []
   for (const t of sorted){
-    let l = 0;
-    while (l < ends.length && t.start < ends[l]) l++;
-    t.lane = l; ends[l] = t.start + t.duration;
+    let l = 0
+    while (l < ends.length && t.start < ends[l]) l++
+    t.lane = l; ends[l] = t.start + t.duration
   }
-  state.lanes = Math.max(6, ends.length);
-  const tl = $('#tl');
-  const minSec = tl ? tl.clientWidth / state.zoom : 30;
-  state.contentSec = Math.max(contentEnd() + 30, minSec);
-  state.contentPx = Math.ceil(state.contentSec * state.zoom);
+  state.lanes = Math.max(6, ends.length)
+  const tl = $("#tl")
+  const minSec = tl ? tl.clientWidth / state.zoom : 30
+  state.contentSec = Math.max(contentEnd() + 30, minSec)
+  state.contentPx = Math.ceil(state.contentSec * state.zoom)
 }
 function renderAll(){
-  const c = $('#content');
-  c.style.width = state.contentPx + 'px';
-  c.style.height = (RULERH + state.lanes * ROWH + 20) + 'px';
-  const lanes = $('#lanes'); lanes.innerHTML = '';
-  for (const t of state.takes) lanes.appendChild(barEl(t));
-  $('#empty').style.display = state.takes.length ? 'none' : 'flex';
-  renderCues();
-  sizeRuler(); drawRuler(); syncPlayheadUI(state.playhead);
+  const c = $("#content")
+  c.style.width = state.contentPx + "px"
+  c.style.height = (RULERH + state.lanes * ROWH + 20) + "px"
+  const lanes = $("#lanes"); lanes.innerHTML = ""
+  for (const t of state.takes) lanes.appendChild(barEl(t))
+  $("#empty").style.display = state.takes.length ? "none" : "flex"
+  renderCues()
+  syncMenu()
+  sizeRuler(); drawRuler(); syncPlayheadUI(state.playhead)
 }
-function refresh(){ layout(); renderAll(); }
+function refresh(){ layout(); renderAll() }
 
 function barEl(t){
-  const lane = LANES[t.lane % LANES.length];
-  const b = el('div', 'bar');
-  b.dataset.id = t.id;
-  b.style.left = (t.start * state.zoom) + 'px';
-  b.style.width = Math.max(16, t.duration * state.zoom) + 'px';
-  b.style.top = (RULERH + t.lane * ROWH + 6) + 'px';
-  b.style.setProperty('--lane', lane.c);
-  b.style.setProperty('--lane-h', lane.h);
-  if (t.kind === 'video') b.classList.add('video');
-  if (state.selectedId === t.id) b.classList.add('selected');
-  const cv = el('canvas', 'wave'); b.appendChild(cv);
-  const nm = el('div', 'tname'); nm.textContent = t.name; b.appendChild(nm);
-  const du = el('div', 'tdur'); du.textContent = fmtClock(t.duration); b.appendChild(du);
-  const me = el('div', 'tmeta'); me.textContent = barMeta(t); b.appendChild(me);
-  drawWave(t, cv);
-  attachBarEvents(b, t);
-  t.el = b;
-  return b;
+  const lane = LANES[t.lane % LANES.length]
+  const b = el("div", "bar")
+  b.dataset.id = t.id
+  b.style.left = (t.start * state.zoom) + "px"
+  b.style.width = Math.max(16, t.duration * state.zoom) + "px"
+  b.style.top = (RULERH + t.lane * ROWH + 7) + "px"
+  b.style.setProperty("--lane", lane.c)
+  b.style.setProperty("--lane-h", lane.h)
+  if (t.kind === "video") b.classList.add("video")
+  if (state.selectedId === t.id) b.classList.add("selected")
+  const cv = el("canvas", "wave"); cv.setAttribute("aria-hidden", "true"); b.appendChild(cv)
+  const nm = el("div", "tname"); nm.textContent = t.name; b.appendChild(nm)
+  const du = el("div", "tdur"); du.textContent = fmtClock(t.duration); b.appendChild(du)
+  const me = el("div", "tmeta"); me.textContent = barMeta(t); b.appendChild(me)
+  drawWave(t, cv)
+  attachBarEvents(b, t)
+  t.el = b
+  return b
 }
 function barMeta(t){
-  const bits = [];
-  if (t.bpm) bits.push(t.bpm + ' bpm');
-  if (t.key) bits.push(t.key);
-  const bp = barPos(t.start);
-  if (bp) bits.push('bar ' + bp);
-  if (t.tags && t.tags.length) bits.push(t.tags.map(x => '#' + x).join(' '));
-  if (t.keep) bits.push('keep');
-  bits.push(t.kind);
-  return bits.join(' · ');
+  const bits = []
+  if (t.bpm) bits.push(t.bpm + " bpm")
+  if (t.key) bits.push(t.key)
+  const bp = barPos(t.start)
+  if (bp) bits.push("bar " + bp)
+  if (t.tags && t.tags.length) bits.push(t.tags.map(x => "#" + x).join(" "))
+  if (t.keep) bits.push("keep")
+  bits.push(t.kind)
+  return bits.join(" · ")
 }
 function updateBarText(t){
-  if (!t.el) return;
-  t.el.querySelector('.tname').textContent = t.name;
-  t.el.querySelector('.tmeta').textContent = barMeta(t);
-  t.el.querySelector('.tdur').textContent = fmtClock(t.duration);
+  if (!t.el) return
+  t.el.querySelector(".tname").textContent = t.name
+  t.el.querySelector(".tmeta").textContent = barMeta(t)
+  t.el.querySelector(".tdur").textContent = fmtClock(t.duration)
 }
 function drawWave(t, cv){
-  const w = Math.max(1, Math.round(t.duration * state.zoom)), h = BARH;
-  const dpr = window.devicePixelRatio || 1;
-  cv.width = Math.min(16000, Math.max(1, Math.round(w * dpr)));
-  cv.height = Math.round(h * dpr);
-  const g = cv.getContext('2d');
-  g.scale(dpr, dpr);
-  if (!t.peaks){ g.fillStyle = 'rgba(255,255,255,.14)'; g.fillRect(0, h / 2 - 1, w, 2); return; }
-  const lane = LANES[t.lane % LANES.length];
-  g.fillStyle = lane.c;
-  const n = t.peaks.length;
+  const w = Math.max(1, Math.round(t.duration * state.zoom)), h = BARH
+  const dpr = window.devicePixelRatio || 1
+  cv.width = Math.min(16000, Math.max(1, Math.round(w * dpr)))
+  cv.height = Math.round(h * dpr)
+  const g = cv.getContext("2d")
+  g.scale(dpr, dpr)
+  if (!t.peaks){ g.fillStyle = cssVar("--ink-dim"); g.globalAlpha = .3; g.fillRect(0, h / 2 - 1, w, 2); g.globalAlpha = 1; return }
+  const lane = LANES[t.lane % LANES.length]
+  g.fillStyle = lane.c
+  const n = t.peaks.length
   for (let x = 0; x < w; x += 2){
-    const p = t.peaks[Math.min(n - 1, Math.floor(x / w * n))];
-    const bh = Math.max(1, p * (h - 10));
-    g.fillRect(x, (h - bh) / 2, 1.4, bh);
+    const p = t.peaks[Math.min(n - 1, Math.floor(x / w * n))]
+    const bh = Math.max(1, p * (h - 10))
+    g.fillRect(x, (h - bh) / 2, 1.4, bh)
   }
 }
 
 /* ---------- ruler ---------- */
 function sizeRuler(){
-  const tl = $('#tl');
-  $('#rulerWrap').style.width = tl.clientWidth + 'px';
+  const tl = $("#tl")
+  $("#rulerWrap").style.width = tl.clientWidth + "px"
 }
 function drawRuler(){
-  const tl = $('#tl'), w = tl.clientWidth, cv = $('#ruler');
-  const dpr = window.devicePixelRatio || 1;
-  cv.width = Math.round(w * dpr); cv.height = Math.round(RULERH * dpr);
-  const g = cv.getContext('2d'); g.scale(dpr, dpr);
-  const off = tl.scrollLeft, z = state.zoom;
-  const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200];
-  const step = steps.find(s => s * z >= 72) || 1200;
-  g.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-mono');
-  g.strokeStyle = 'rgba(255,255,255,.22)';
-  g.fillStyle = 'rgba(255,255,255,.5)';
-  const first = Math.max(0, Math.floor(off / z / step) * step);
+  const tl = $("#tl"), w = tl.clientWidth, cv = $("#ruler")
+  const dpr = window.devicePixelRatio || 1
+  cv.width = Math.round(w * dpr); cv.height = Math.round(RULERH * dpr)
+  const g = cv.getContext("2d"); g.scale(dpr, dpr)
+  const off = tl.scrollLeft, z = state.zoom
+  const steps = [ 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200 ]
+  const step = steps.find(s => s * z >= 72) || 1200
+  g.font = "10px " + cssVar("--font-mono")
+  g.strokeStyle = cssVar("--line")
+  g.fillStyle = cssVar("--ink-dim")
+  const first = Math.max(0, Math.floor(off / z / step) * step)
   for (let s = first; s * z <= off + w; s += step){
-    const x = Math.round(s * z - off) + .5;
-    g.beginPath(); g.moveTo(x, RULERH - 8); g.lineTo(x, RULERH - 1); g.stroke();
-    g.fillText(fmtClock(s), x + 4, 14);
+    const x = Math.round(s * z - off) + .5
+    g.beginPath(); g.moveTo(x, RULERH - 8); g.lineTo(x, RULERH - 1); g.stroke()
+    g.fillText(fmtClock(s), x + 4, 14)
+  }
+  // bar ticks along the bottom edge when the session has a bpm (taller every 4 bars)
+  const bpm = state.session.bpm
+  if (bpm){
+    const barSec = 240 / bpm
+    g.strokeStyle = cssVar("--accent")
+    g.globalAlpha = .55
+    for (let b = Math.max(1, Math.floor(off / z / barSec)); b * barSec * z <= off + w; b++){
+      const x = Math.round(b * barSec * z - off) + .5
+      const major = (b - 1) % 4 === 0
+      g.beginPath(); g.moveTo(x, RULERH - (major ? 7 : 4)); g.lineTo(x, RULERH - 1); g.stroke()
+    }
+    g.globalAlpha = 1
   }
 }
 
 /* ---------- cues ---------- */
-function cueById(id){ return state.cues.find(c => c.id === id); }
+function cueById(id){ return state.cues.find(c => c.id === id) }
 function renderCues(){
-  const wrap = $('#cues');
-  wrap.innerHTML = '';
+  const wrap = $("#cues")
+  wrap.innerHTML = ""
   for (const c of state.cues){
-    const d = el('div', 'cue');
-    d.dataset.id = c.id;
-    d.style.left = (c.pos * state.zoom) + 'px';
-    if (state.selectedCueId === c.id) d.classList.add('selected');
-    d.title = cueTitle(c);
-    attachCueEvents(d, c);
-    wrap.appendChild(d);
+    const d = el("div", "cue")
+    d.dataset.id = c.id
+    d.style.left = (c.pos * state.zoom) + "px"
+    if (state.selectedCueId === c.id) d.classList.add("selected")
+    d.title = cueTitle(c)
+    attachCueEvents(d, c)
+    wrap.appendChild(d)
   }
 }
 function cueTitle(c){
-  const bits = [fmtClock(c.pos)];
-  const bp = barPos(c.pos);
-  if (bp) bits.push('bar ' + bp);
-  if (c.name) bits.push(c.name);
-  return bits.join(' · ');
+  const bits = [ fmtClock(c.pos) ]
+  const bp = barPos(c.pos)
+  if (bp) bits.push("bar " + bp)
+  if (c.name) bits.push(c.name)
+  return bits.join(" · ")
 }
 function syncCueDom(c){
-  const d = $('#cues .cue[data-id="' + c.id + '"]');
-  if (d) d.title = cueTitle(c);
+  const d = $('#cues .cue[data-id="' + c.id + '"]')
+  if (d) d.title = cueTitle(c)
 }
 function attachCueEvents(d, c){
-  let px0 = 0, p0 = 0, moved = false, dragging = false;
-  d.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    px0 = e.clientX; p0 = c.pos; moved = false; dragging = true;
-    try { d.setPointerCapture(e.pointerId); } catch (err) {}
-  });
-  d.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const dx = e.clientX - px0;
-    if (Math.abs(dx) > 3) moved = true;
+  let px0 = 0, p0 = 0, moved = false, dragging = false
+  d.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    px0 = e.clientX; p0 = c.pos; moved = false; dragging = true
+    try { d.setPointerCapture(e.pointerId) } catch (err) { /* ignore */ }
+  })
+  d.addEventListener("pointermove", e => {
+    if (!dragging) return
+    const dx = e.clientX - px0
+    if (Math.abs(dx) > 3) moved = true
     if (moved){
-      c.pos = Math.max(0, p0 + dx / state.zoom);
-      d.style.left = (c.pos * state.zoom) + 'px';
+      c.pos = Math.max(0, p0 + dx / state.zoom)
+      d.style.left = (c.pos * state.zoom) + "px"
     }
-  });
-  d.addEventListener('pointerup', () => {
-    dragging = false;
-    if (moved){ saveCues(); renderCues(); d.title = cueTitle(c); renderPanelIfCue(); }
-    else selectCue(c.id);
-  });
-  d.addEventListener('dblclick', () => {});   // dblclick on ruler handles creation
+  })
+  d.addEventListener("pointerup", () => {
+    dragging = false
+    if (moved){ saveCues(); renderCues(); d.title = cueTitle(c); refreshViewIfCue() }
+    else selectCue(c.id)
+  })
+  d.addEventListener("dblclick", () => {})   // dblclick on ruler handles creation
 }
 function selectCue(id){
-  state.selectedId = null;
-  document.querySelectorAll('.bar.selected').forEach(b => b.classList.remove('selected'));
-  state.selectedCueId = id;
-  renderCues();
-  renderPanel();
+  state.selectedId = null
+  document.querySelectorAll(".bar.selected").forEach(b => b.classList.remove("selected"))
+  state.selectedCueId = id
+  renderCues()
+  openView()
 }
-function renderPanelIfCue(){
-  if (state.selectedCueId && !takeById(state.selectedId)) renderPanel();
+function refreshViewIfCue(){
+  const c = cueById(state.selectedCueId)
+  if (!c || !$("#viewOvl").classList.contains("open")) return
+  const pos = $("#vPos")
+  if (pos) pos.value = c.pos.toFixed(2)
+  const meta = $("#vMeta")
+  if (meta) meta.textContent = fmtClock(c.pos) + (barPos(c.pos) ? " · bar " + barPos(c.pos) : "")
 }
+
 function addCue(pos){
-  const c = { id: uid(), pos: Math.max(0, pos), name: '', notes: '' };
-  state.cues.push(c);
-  state.cues.sort((a, b) => a.pos - b.pos);
-  saveCues();
-  renderCues();
-  selectCue(c.id);
-  return c;
+  const c = { id: uid(), pos: Math.max(0, pos), name: "", notes: "" }
+  state.cues.push(c)
+  state.cues.sort((a, b) => a.pos - b.pos)
+  saveCues()
+  renderCues()
+  selectCue(c.id)
+  return c
 }
 function deleteCue(id){
-  const i = state.cues.findIndex(c => c.id === id);
-  if (i < 0) return;
-  state.cues.splice(i, 1);
-  if (state.selectedCueId === id) state.selectedCueId = null;
-  saveCues();
-  renderCues();
-  renderPanel();
+  const i = state.cues.findIndex(c => c.id === id)
+  if (i < 0) return
+  state.cues.splice(i, 1)
+  if (state.selectedCueId === id) state.selectedCueId = null
+  saveCues()
+  renderCues()
+  closeView()
 }
 
 /* ---------- bar drag & select ---------- */
 function attachBarEvents(b, t){
-  let px0 = 0, s0 = 0, moved = false, dragging = false;
-  b.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    px0 = e.clientX; s0 = t.start; moved = false; dragging = true;
-    try { b.setPointerCapture(e.pointerId); } catch (err) {}
-    e.stopPropagation();
-  });
-  b.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const dx = e.clientX - px0;
-    if (Math.abs(dx) > 3) moved = true;
+  let px0 = 0, s0 = 0, moved = false, dragging = false
+  b.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return
+    px0 = e.clientX; s0 = t.start; moved = false; dragging = true
+    try { b.setPointerCapture(e.pointerId) } catch (err) { /* ignore */ }
+    e.stopPropagation()
+  })
+  b.addEventListener("pointermove", e => {
+    if (!dragging) return
+    const dx = e.clientX - px0
+    if (Math.abs(dx) > 3) moved = true
     if (moved){
-      t.start = Math.max(0, s0 + dx / state.zoom);
-      b.style.left = (t.start * state.zoom) + 'px';
-      $('#time').textContent = '@ ' + fmtTime(t.start);
+      t.start = Math.max(0, s0 + dx / state.zoom)
+      b.style.left = (t.start * state.zoom) + "px"
+      $("#time").textContent = "@ " + fmtTime(t.start)
     }
-  });
-  b.addEventListener('pointerup', () => {
-    dragging = false;
-    if (moved){ idbPutTake(t); refresh(); updateTimeReadout(); }
-    else select(t.id);
-  });
+  })
+  b.addEventListener("pointerup", () => {
+    dragging = false
+    if (moved){ idbPutTake(t); refresh(); updateTimeReadout() }
+    else select(t.id)
+  })
 }
 
 /* ---------- select & metadata panel ---------- */
 function select(id){
-  state.selectedId = id;
-  state.selectedCueId = null;
-  renderCues();
-  document.querySelectorAll('.bar.selected').forEach(b => b.classList.remove('selected'));
-  const t = takeById(id);
+  state.selectedId = id
+  state.selectedCueId = null
+  renderCues()
+  document.querySelectorAll(".bar.selected").forEach(b => b.classList.remove("selected"))
+  const t = takeById(id)
   if (t && t.el){
-    t.el.classList.add('selected');
-    t.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    t.el.classList.add("selected")
+    t.el.scrollIntoView({ block: "nearest", inline: "nearest" })
   }
-  renderPanel();
-  renderChips();
+  if (t) openView(); else closeView()
+}
+/* ---------- overlays: menu (session) + detail views (takes & cues) ---------- */
+const ovlIsOpen = s => $(s).classList.contains("open")
+function openOvl(s){
+  const o = $(s)
+  clearTimeout(o._t)
+  o.classList.remove("closing")
+  o.classList.add("open")
+  o.setAttribute("aria-hidden", "false")
+  $(s + " .panel").focus({ preventScroll: true })
+}
+function closeOvl(s, after){
+  const o = $(s)
+  if (!ovlIsOpen(s)) return
+  o.classList.add("closing")
+  clearTimeout(o._t)
+  o._t = setTimeout(() => {
+    o.classList.remove("open", "closing")
+    o.setAttribute("aria-hidden", "true")
+    if (after) after()
+  }, 170)
+}
+function openMenu(){
+  syncMenu()
+  openOvl("#menuOvl")
+  document.body.classList.add("menu-open")
+  $("#burger").setAttribute("aria-expanded", "true")
+}
+function closeMenu(){
+  closeOvl("#menuOvl", () => {
+    document.body.classList.remove("menu-open")
+    $("#burger").setAttribute("aria-expanded", "false")
+    $("#burger").focus({ preventScroll: true })
+  })
+}
+function syncMenu(){
+  const s = state.session
+  $("#bpmVal").textContent = s.bpm ? String(s.bpm) : "\u2014"
+  $("#mNotes").value = s.notes || ""
+  const has = state.takes.length > 0
+  for (const b of [ $("#mExport"), $("#mZip") ]){
+    b.disabled = !has
+    b.title = has ? "" : "record something first"
+  }
+  document.querySelectorAll(".keygrid button").forEach(b => {
+    b.classList.toggle("on", !!s.key && b.dataset.key === s.key)
+  })
+}
+function bpmStep(d){
+  state.session.bpm = clamp((state.session.bpm ?? 120) + d, 20, 300)
+  saveSessionMeta(); syncMenu(); renderMasthead(); onBpmChange()
+}
+function setKey(k){
+  state.session.key = state.session.key === k ? "" : k
+  saveSessionMeta(); syncMenu(); renderMasthead()
+}
+const ROOTS = [ "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" ]
+function buildKeyGrids(){
+  for (const [ wrap, suffix ] of [ [ $("#keyMajor"), "" ], [ $("#keyMinor"), "m" ] ]){
+    for (const r of ROOTS){
+      const b = el("button")
+      b.type = "button"
+      b.dataset.key = r + suffix
+      b.textContent = r + suffix
+      b.addEventListener("click", () => setKey(b.dataset.key))
+      wrap.appendChild(b)
+    }
+  }
+}
+// press-and-hold repeat for the bpm stepper
+function holdable(btn, fn){
+  let t = 0, iv = 0
+  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = 0 }
+  btn.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || btn.disabled) return
+    fn()
+    t = setTimeout(() => { iv = setInterval(fn, 70) }, 420)
+  })
+  for (const ev of [ "pointerup", "pointerleave", "pointercancel" ]) btn.addEventListener(ev, stop)
+}
+// keep keyboard focus inside an open overlay panel
+function trapFocus(panel){
+  panel.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return
+    const f = [ ...panel.querySelectorAll('button, input, textarea, select, [tabindex]:not([tabindex="-1"])') ]
+      .filter(x => !x.disabled && x.offsetParent !== null)
+    if (!f.length) return
+    const first = f[0], last = f[f.length - 1]
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus() }
+  })
 }
 function pmetaHTML(t){
-  return esc(t.recordedAt.replace('T', ' ').slice(0, 19)) + '<br>' +
-    fmtClock(t.duration) + ' · starts ' + fmtClock(t.start) +
-    (barPos(t.start) ? ' · bar ' + barPos(t.start) : '');
+  return esc(t.recordedAt.replace("T", " ").slice(0, 19)) + "<br>" +
+    fmtClock(t.duration) + " · starts " + fmtClock(t.start) +
+    (barPos(t.start) ? " · bar " + barPos(t.start) : "")
 }
-function renderPanel(){
-  if (panelUrl){ URL.revokeObjectURL(panelUrl); panelUrl = null; }
-  const p = $('#panel');
-  const cue = cueById(state.selectedCueId);
+/* ---------- detail view: the designer panel for the selected take or cue ---------- */
+function openView(){ renderViewBody(); openOvl("#viewOvl") }
+function closeView(){ closeOvl("#viewOvl") }
+function dismissView(){
+  state.selectedId = null
+  state.selectedCueId = null
+  renderCues()
+  document.querySelectorAll(".bar.selected").forEach(b => b.classList.remove("selected"))
+  closeView()
+}
+function renderViewBody(){
+  if (panelUrl){ URL.revokeObjectURL(panelUrl); panelUrl = null }
+  const body = $("#vBody")
+  const cue = cueById(state.selectedCueId)
   if (cue){
-    p.classList.remove('empty');
-    p.classList.add('cue-mode');
-    p.innerHTML =
-      '<label class="f"><span>cue</span><input id="cName" type="text" value="' + esc(cue.name) + '" placeholder="cue name"></label>' +
-      '<label class="f"><span>time</span><input id="cPos" type="number" min="0" step="any" value="' + cue.pos.toFixed(2) + '"></label>' +
-      '<label class="f grow"><span>notes</span><textarea id="cNotes" rows="2" placeholder="what happens here…">' + esc(cue.notes) + '</textarea></label>' +
-      '<div class="pmeta">' + fmtClock(cue.pos) + (barPos(cue.pos) ? ' · bar ' + barPos(cue.pos) : '') + '<br>double-click ruler to add another</div>' +
-      '<button id="cDelete" class="danger">delete</button>';
-    $('#cName').addEventListener('input', e => { cue.name = e.target.value; saveCues(); syncCueDom(cue); });
-    $('#cPos').addEventListener('input', e => {
-      cue.pos = Math.max(0, parseFloat(e.target.value) || 0);
-      state.cues.sort((a, b) => a.pos - b.pos);
-      saveCues(); renderCues();
-    });
-    $('#cNotes').addEventListener('input', e => { cue.notes = e.target.value; saveCues(); });
-    $('#cDelete').addEventListener('click', () => deleteCue(cue.id));
-    return;
+    $("#vKicker").textContent = "cue"
+    body.innerHTML =
+      '<input class="v-name" id="vName" type="text" value="' + esc(cue.name) + '" placeholder="cue name">' +
+      '<div class="v-meta" id="vMeta">' + fmtClock(cue.pos) + (barPos(cue.pos) ? " · bar " + barPos(cue.pos) : "") + "</div>" +
+      '<label><span class="f-lab">time</span><input id="vPos" type="number" min="0" step="any" value="' + cue.pos.toFixed(2) + '"></label>' +
+      '<label><span class="f-lab">notes</span><textarea id="vNotes" rows="5" placeholder="what happens here…">' + esc(cue.notes) + "</textarea></label>" +
+      '<button class="v-del" id="vDel">delete cue</button>'
+    $("#vName").addEventListener("input", e => { cue.name = e.target.value; saveCues(); syncCueDom(cue) })
+    $("#vPos").addEventListener("input", e => {
+      cue.pos = Math.max(0, parseFloat(e.target.value) || 0)
+      state.cues.sort((a, b) => a.pos - b.pos)
+      saveCues(); renderCues(); refreshViewIfCue()
+    })
+    $("#vNotes").addEventListener("input", e => { cue.notes = e.target.value; saveCues() })
+    $("#vDel").addEventListener("click", () => deleteCue(cue.id))
+    return
   }
-  p.classList.remove('cue-mode');
-  const t = takeById(state.selectedId);
-  if (!t){
-    p.classList.add('empty');
-    p.innerHTML =
-      '<div class="f" style="flex:1"><span class="slabel">session notes</span>' +
-      '<textarea id="sessionNotes" rows="2" placeholder="notes for the whole session — click a take to edit its details, double-click the ruler to add a cue"></textarea></div>';
-    const ta = $('#sessionNotes');
-    ta.value = state.session.notes || '';
-    ta.addEventListener('input', e => { state.session.notes = e.target.value; saveSessionMeta(); });
-    return;
-  }
-  p.classList.remove('empty');
-  p.innerHTML =
-    '<label class="f"><span>name</span><input id="fName" type="text" value="' + esc(t.name) + '"></label>' +
-    '<label class="f"><span>bpm</span><input id="fBpm" type="number" min="0" step="any" value="' + (t.bpm ?? '') + '"></label>' +
-    '<label class="f"><span>key</span><input id="fKey" type="text" value="' + esc(t.key) + '" placeholder="Am"></label>' +
-    '<label class="f"><span>tags</span><input id="fTags" type="text" value="' + esc((t.tags || []).join(', ')) + '" placeholder="riff, dark"></label>' +
-    '<label class="keep"><input id="fKeep" type="checkbox" ' + (t.keep ? 'checked' : '') + '><span>keep</span></label>' +
-    '<label class="f grow"><span>notes</span><textarea id="fNotes" rows="2">' + esc(t.notes) + '</textarea></label>' +
-    '<div class="pmeta">' + pmetaHTML(t) + '</div>' +
-    '<button id="fDelete" class="danger">delete</button>' +
-    (t.kind === 'video' ? '<video id="fVid" controls playsinline></video>' : '');
-  if (t.kind === 'video'){ panelUrl = URL.createObjectURL(t.blob); $('#fVid').src = panelUrl; }
-
-  const save = () => { updateBarText(t); idbPutTake(t); };
-  $('#fName').addEventListener('input', e => { t.name = e.target.value; save(); });
-  $('#fBpm').addEventListener('input', e => { t.bpm = e.target.value === '' ? null : (parseFloat(e.target.value) || null); save(); });
-  $('#fKey').addEventListener('input', e => { t.key = e.target.value.trim(); save(); });
-  $('#fTags').addEventListener('input', e => { t.tags = e.target.value.split(',').map(s => s.trim()).filter(Boolean); save(); });
-  $('#fKeep').addEventListener('change', e => { t.keep = e.target.checked; save(); });
-  $('#fNotes').addEventListener('input', e => { t.notes = e.target.value; save(); });
-  $('#fDelete').addEventListener('click', () => {
-    if (confirm('Delete "' + t.name + '"?')) deleteTake(t.id);
-  });
+  const t = takeById(state.selectedId)
+  if (!t){ body.innerHTML = ""; return }
+  $("#vKicker").textContent = "take"
+  body.innerHTML =
+    '<input class="v-name" id="vName" type="text" value="' + esc(t.name) + '" placeholder="take name">' +
+    '<div class="v-meta" id="vMeta">' + pmetaHTML(t) + "</div>" +
+    '<div class="v-grid">' +
+      '<label><span class="f-lab">bpm</span><input id="vBpm" type="number" min="0" step="any" value="' + (t.bpm ?? "") + '" placeholder="—"></label>' +
+      '<label><span class="f-lab">key</span><input id="vKey" type="text" value="' + esc(t.key) + '" placeholder="Am"></label>' +
+      '<label class="v-span"><span class="f-lab">tags</span><input id="vTags" type="text" value="' + esc((t.tags || []).join(", ")) + '" placeholder="riff, dark"></label>' +
+    "</div>" +
+    '<label class="v-keep"><input id="vKeep" type="checkbox"' + (t.keep ? " checked" : "") + "><span>keep</span></label>" +
+    '<label><span class="f-lab">notes</span><textarea id="vNotes" rows="5">' + esc(t.notes) + "</textarea></label>" +
+    (t.kind === "video" ? '<video class="v-vid" id="vVid" controls playsinline></video>' : "") +
+    '<button class="v-del" id="vDel">delete take</button>'
+  if (t.kind === "video"){ panelUrl = URL.createObjectURL(t.blob); $("#vVid").src = panelUrl }
+  const save = () => { updateBarText(t); idbPutTake(t) }
+  $("#vName").addEventListener("input", e => { t.name = e.target.value; save() })
+  $("#vBpm").addEventListener("input", e => { t.bpm = e.target.value === "" ? null : (parseFloat(e.target.value) || null); save() })
+  $("#vKey").addEventListener("input", e => { t.key = e.target.value.trim(); save() })
+  $("#vTags").addEventListener("input", e => { t.tags = e.target.value.split(",").map(s => s.trim()).filter(Boolean); save() })
+  $("#vKeep").addEventListener("change", e => { t.keep = e.target.checked; save() })
+  $("#vNotes").addEventListener("input", e => { t.notes = e.target.value; save() })
+  $("#vDel").addEventListener("click", () => {
+    if (confirm('Delete "' + t.name + '"?')) deleteTake(t.id)
+  })
 }
 
 function deleteTake(id){
-  const i = state.takes.findIndex(t => t.id === id);
-  if (i < 0) return;
-  pausePlayback();
-  state.takes.splice(i, 1);
-  if (state.selectedId === id) state.selectedId = null;
-  idbDelTake(id);
-  const v = play.videos.get(id);
-  if (v){ URL.revokeObjectURL(v.src); v.remove(); play.videos.delete(id); }
-  refresh(); renderPanel();
+  const i = state.takes.findIndex(t => t.id === id)
+  if (i < 0) return
+  pausePlayback()
+  state.takes.splice(i, 1)
+  if (state.selectedId === id) state.selectedId = null
+  idbDelTake(id)
+  const v = play.videos.get(id)
+  if (v){ URL.revokeObjectURL(v.src); v.remove(); play.videos.delete(id) }
+  refresh(); closeView()
 }
 
 /* ---------- recording ---------- */
 /* live-device cache: keep the granted stream around between takes so the browser
    doesn't re-prompt for mic/camera on every take. Released when the video mode
    changes, the session resets, or the user revokes the device mid-session. */
-let media = null;
+let media = null
 function releaseMedia(){
-  if (!media) return;
-  media.stream.getTracks().forEach(tr => tr.stop());
-  media = null;
+  if (!media) return
+  media.stream.getTracks().forEach(tr => tr.stop())
+  media = null
 }
 async function getMedia(wantVideo){
   if (media){
-    const allLive = media.stream.getTracks().every(tr => tr.readyState === 'live');
-    if (media.hasVideo === wantVideo && allLive) return media.stream;
-    releaseMedia();                    // mode switched or a track died — request fresh
+    const allLive = media.stream.getTracks().every(tr => tr.readyState === "live")
+    if (media.hasVideo === wantVideo && allLive) return media.stream
+    releaseMedia()                    // mode switched or a track died — request fresh
   }
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
-  });
-  media = { stream, hasVideo: !!stream.getVideoTracks().length };
-  stream.getTracks().forEach(tr => tr.addEventListener('ended', () => {
-    if (media && media.stream === stream) media = null;   // revoked / unplugged
-  }));
-  return stream;
+    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false
+  })
+  media = { stream, hasVideo: !!stream.getVideoTracks().length }
+  stream.getTracks().forEach(tr => tr.addEventListener("ended", () => {
+    if (media && media.stream === stream) media = null   // revoked / unplugged
+  }))
+  return stream
 }
 function pickMime(kind){
-  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
-  const list = kind === 'video'
-    ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
-    : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
-  return list.find(m => MediaRecorder.isTypeSupported(m)) || '';
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return ""
+  const list = kind === "video"
+    ? [ "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4" ]
+    : [ "audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus" ]
+  return list.find(m => MediaRecorder.isTypeSupported(m)) || ""
 }
 function extFor(mime, kind){
-  if (/webm/.test(mime)) return 'webm';
-  if (/mp4/.test(mime)) return kind === 'video' ? 'mp4' : 'm4a';
-  if (/wav/.test(mime)) return 'wav';
-  if (/ogg/.test(mime)) return 'ogg';
-  return 'webm';
+  if (/webm/.test(mime)) return "webm"
+  if (/mp4/.test(mime)) return kind === "video" ? "mp4" : "m4a"
+  if (/wav/.test(mime)) return "wav"
+  if (/ogg/.test(mime)) return "ogg"
+  return "webm"
 }
-async function toggleRecord(){ rec ? stopRecording() : await startRecording(); }
+async function toggleRecord(){ rec ? stopRecording() : await startRecording() }
 async function startRecording(){
-  if (rec) return;
-  const wantVideo = $('#videoChk').checked;
-  let stream;
-  try { stream = await getMedia(wantVideo); }
-  catch (err){ toast('mic/camera unavailable: ' + (err.name || err.message)); return; }
-  ensureCtx(); try { await audioCtx.resume(); } catch (e) {}
-  const kind = stream.getVideoTracks().length ? 'video' : 'audio';
-  const mime = pickMime(kind);
-  let recorder;
-  try { recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+  if (rec) return
+  const wantVideo = $("#videoChk").checked
+  let stream
+  try { stream = await getMedia(wantVideo) }
+  catch (err){ toast("mic/camera unavailable: " + (err.name || err.message)); return }
+  ensureCtx(); try { await audioCtx.resume() } catch (e) { /* ignore */ }
+  const kind = stream.getVideoTracks().length ? "video" : "audio"
+  const mime = pickMime(kind)
+  let recorder
+  try { recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined) }
   catch (e){
-    try { recorder = new MediaRecorder(stream); }
-    catch (e2){ toast('MediaRecorder unavailable in this browser'); stream.getTracks().forEach(t => t.stop()); return; }
+    try { recorder = new MediaRecorder(stream) }
+    catch (e2){ toast("MediaRecorder unavailable in this browser"); stream.getTracks().forEach(t => t.stop()); return }
   }
-  const chunks = [];
-  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  recorder.onerror = () => toast('recorder error');
+  const chunks = []
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data) }
+  recorder.onerror = () => toast("recorder error")
   recorder.onstop = () => {
-    const r = rec; if (!r) return;
-    const blob = new Blob(r.chunks, { type: r.recorder.mimeType || 'audio/webm' });
-    const dur = (performance.now() - r.startWall) / 1000;
-    cleanupRecUI(r);
-    rec = null;
-    document.body.classList.remove('recording');
-    commitTake({ blob, kind: r.kind, start: r.startPos, duration: dur, mime: blob.type });
-  };
-  recorder.start(1000);
+    const r = rec; if (!r) return
+    const blob = new Blob(r.chunks, { type: r.recorder.mimeType || "audio/webm" })
+    const dur = (performance.now() - r.startWall) / 1000
+    cleanupRecUI(r)
+    rec = null
+    document.body.classList.remove("recording")
+    $("#recLabel").textContent = "rec"
+    commitTake({ blob, kind: r.kind, start: r.startPos, duration: dur, mime: blob.type })
+  }
+  recorder.start(1000)
   rec = {
     recorder, stream, chunks, kind,
     startPos: state.playhead,
-    startWall: performance.now(),
-  };
-  document.body.classList.add('recording');
-  startRecUI();
-  toast(kind === 'video' ? 'recording video — press again to stop' : 'recording — press again to stop');
+    startWall: performance.now()
+  }
+  document.body.classList.add("recording")
+  $("#recLabel").textContent = "stop"
+  startRecUI()
+  toast(kind === "video" ? "recording video — press again to stop" : "recording — press again to stop")
 }
-function stopRecording(){ if (rec){ try { rec.recorder.stop(); } catch (e) {} } }
+function stopRecording(){ if (rec){ try { rec.recorder.stop() } catch (e) { /* ignore */ } } }
 function startRecUI(){
-  const r = rec;
-  if (r.kind === 'video'){
-    const v = $('#camPreview'); v.srcObject = r.stream; v.classList.remove('hidden'); v.play().catch(() => {});
+  const r = rec
+  if (r.kind === "video"){
+    const v = $("#camPreview"); v.srcObject = r.stream; v.classList.remove("hidden"); v.play().catch(() => {})
   }
   try {
-    r.srcNode = audioCtx.createMediaStreamSource(r.stream);
-    r.analyser = audioCtx.createAnalyser(); r.analyser.fftSize = 512;
-    r.srcNode.connect(r.analyser);   // never to destination — no feedback
-  } catch (e) {}
-  const buf = new Uint8Array(256);
+    r.srcNode = audioCtx.createMediaStreamSource(r.stream)
+    r.analyser = audioCtx.createAnalyser(); r.analyser.fftSize = 512
+    r.srcNode.connect(r.analyser)   // never to destination — no feedback
+  } catch (e) { /* ignore */ }
+  const buf = new Uint8Array(256)
   const tick = () => {
-    if (!rec) return;
-    $('#time').textContent = 'REC ' + fmtTime((performance.now() - rec.startWall) / 1000);
+    if (!rec) return
+    $("#time").textContent = "REC " + fmtTime((performance.now() - rec.startWall) / 1000)
     if (rec.analyser){
-      rec.analyser.getByteTimeDomainData(buf);
-      let pk = 0;
-      for (let i = 0; i < buf.length; i++){ const d = Math.abs(buf[i] - 128) / 128; if (d > pk) pk = d; }
-      $('#meterFill').style.setProperty('--lvl', Math.min(1, pk * 1.4).toFixed(3));
+      rec.analyser.getByteTimeDomainData(buf)
+      let pk = 0
+      for (let i = 0; i < buf.length; i++){ const d = Math.abs(buf[i] - 128) / 128; if (d > pk) pk = d }
+      $("#meterFill").style.setProperty("--lvl", Math.min(1, pk * 1.4).toFixed(3))
     }
-    rec.raf = requestAnimationFrame(tick);
-  };
-  tick();
+    rec.raf = requestAnimationFrame(tick)
+  }
+  tick()
 }
 function cleanupRecUI(r){
-  if (r && r.raf) cancelAnimationFrame(r.raf);
-  const v = $('#camPreview'); v.srcObject = null; v.classList.add('hidden');
-  $('#meterFill').style.setProperty('--lvl', 0);
-  updateTimeReadout();
+  if (r && r.raf) cancelAnimationFrame(r.raf)
+  const v = $("#camPreview"); v.srcObject = null; v.classList.add("hidden")
+  $("#meterFill").style.setProperty("--lvl", 0)
+  updateTimeReadout()
 }
 
 function commitTake({ blob, kind, start, duration, mime, recordedAt }){
   const t = {
     id: uid(),
-    name: 'Take ' + (state.takes.length + 1),
-    kind: kind || 'audio',
+    name: "Take " + (state.takes.length + 1),
+    kind: kind || "audio",
     start: Math.max(0, start || 0),
     duration: duration || 0,
     recordedAt: recordedAt || isoNow(),
-    bpm: null, key: '', tags: [], notes: '', keep: false,
-    mime: mime || blob.type || 'audio/webm',
-    blob, buffer: null, peaks: null, lane: 0,
-  };
-  t.ext = extFor(t.mime, t.kind);
-  state.takes.push(t);
-  refresh();
-  ensurePeaks(t);
-  select(t.id);
-  idbPutTake(t);
-  return t;
+    bpm: null, key: "", tags: [], notes: "", keep: false,
+    mime: mime || blob.type || "audio/webm",
+    blob, buffer: null, peaks: null, lane: 0
+  }
+  t.ext = extFor(t.mime, t.kind)
+  state.takes.push(t)
+  refresh()
+  ensurePeaks(t)
+  select(t.id)
+  idbPutTake(t)
+  return t
 }
 
 /* ---------- playback ---------- */
-async function togglePlay(){ state.playing ? pausePlayback() : await startPlayback(); }
+async function togglePlay(){ state.playing ? pausePlayback() : await startPlayback() }
 async function startPlayback(){
-  if (!state.takes.length) return;
-  ensureCtx(); try { await audioCtx.resume(); } catch (e) {}
-  stopSources();
-  const end = contentEnd();
-  let pos = state.playhead >= end - 0.05 ? 0 : state.playhead;
-  state.playhead = pos;
-  play.startCtx = audioCtx.currentTime; play.startPos = pos;
+  if (!state.takes.length) return
+  ensureCtx(); try { await audioCtx.resume() } catch (e) { /* ignore */ }
+  stopSources()
+  const end = contentEnd()
+  const pos = state.playhead >= end - 0.05 ? 0 : state.playhead
+  state.playhead = pos
+  play.startCtx = audioCtx.currentTime; play.startPos = pos
   for (const t of state.takes){
-    if (t.kind !== 'audio' || !t.buffer) continue;
-    if (t.start + t.duration <= pos || t.start >= end) continue;
-    const src = audioCtx.createBufferSource();
-    src.buffer = t.buffer; src.connect(audioCtx.destination);
-    if (t.start >= pos) src.start(play.startCtx + (t.start - pos), 0, t.duration);
-    else src.start(play.startCtx, pos - t.start, t.duration - (pos - t.start));
-    play.sources.push(src);
+    if (t.kind !== "audio" || !t.buffer) continue
+    if (t.start + t.duration <= pos || t.start >= end) continue
+    const src = audioCtx.createBufferSource()
+    src.buffer = t.buffer; src.connect(audioCtx.destination)
+    if (t.start >= pos) src.start(play.startCtx + (t.start - pos), 0, t.duration)
+    else src.start(play.startCtx, pos - t.start, t.duration - (pos - t.start))
+    play.sources.push(src)
   }
-  state.playing = true;
-  document.body.classList.add('playing');
-  rafLoop();
+  state.playing = true
+  document.body.classList.add("playing")
+  rafLoop()
 }
 function pausePlayback(){
-  stopSources(); pauseVideos();
-  state.playing = false;
-  document.body.classList.remove('playing');
-  if (play.raf) cancelAnimationFrame(play.raf);
-  updateTimeReadout();
+  stopSources(); pauseVideos()
+  state.playing = false
+  document.body.classList.remove("playing")
+  if (play.raf) cancelAnimationFrame(play.raf)
+  updateTimeReadout()
 }
-function stopSources(){ play.sources.forEach(s => { try { s.stop(); } catch (e) {} }); play.sources = []; }
+function stopSources(){ play.sources.forEach(s => { try { s.stop() } catch (e) { /* ignore */ } }); play.sources = [] }
 function rafLoop(){
-  if (!state.playing) return;
-  const pos = play.startPos + (audioCtx.currentTime - play.startCtx);
-  state.playhead = pos;
-  syncPlayheadUI(pos); syncVideos(pos); updateTimeReadout(); followPlayhead();
+  if (!state.playing) return
+  const pos = play.startPos + (audioCtx.currentTime - play.startCtx)
+  state.playhead = pos
+  syncPlayheadUI(pos); syncVideos(pos); updateTimeReadout(); followPlayhead()
   if (pos >= contentEnd()){
-    pausePlayback();
-    state.playhead = contentEnd(); syncPlayheadUI(state.playhead);
-    return;
+    pausePlayback()
+    state.playhead = contentEnd(); syncPlayheadUI(state.playhead)
+    return
   }
-  play.raf = requestAnimationFrame(rafLoop);
+  play.raf = requestAnimationFrame(rafLoop)
 }
 function syncVideos(pos){
   for (const t of state.takes){
-    if (t.kind !== 'video' || !t.duration) continue;
-    const rel = pos - t.start;
-    const active = rel >= 0 && rel < t.duration - 0.05;
-    let v = play.videos.get(t.id);
+    if (t.kind !== "video" || !t.duration) continue
+    const rel = pos - t.start
+    const active = rel >= 0 && rel < t.duration - 0.05
+    let v = play.videos.get(t.id)
     if (active){
       if (!v){
-        v = document.createElement('video');
-        v.src = URL.createObjectURL(t.blob); v.preload = 'auto'; v.className = 'tl-video';
-        document.body.appendChild(v); play.videos.set(t.id, v);
+        v = document.createElement("video")
+        v.src = URL.createObjectURL(t.blob); v.preload = "auto"; v.className = "tl-video"
+        document.body.appendChild(v); play.videos.set(t.id, v)
       }
-      if (v.readyState >= 1 && Math.abs(v.currentTime - rel) > 0.3) v.currentTime = rel;
-      if (v.paused) v.play().catch(() => {});
-    } else if (v && !v.paused) v.pause();
+      if (v.readyState >= 1 && Math.abs(v.currentTime - rel) > 0.3) v.currentTime = rel
+      if (v.paused) v.play().catch(() => {})
+    } else if (v && !v.paused) v.pause()
   }
 }
-function pauseVideos(){ play.videos.forEach(v => v.pause()); }
+function pauseVideos(){ play.videos.forEach(v => v.pause()) }
 function seekTo(pos){
-  state.playhead = Math.max(0, pos);
-  if (state.playing) startPlayback();
-  else { syncPlayheadUI(state.playhead); updateTimeReadout(); followPlayhead(); }
+  state.playhead = Math.max(0, pos)
+  if (state.playing) startPlayback()
+  else { syncPlayheadUI(state.playhead); updateTimeReadout(); followPlayhead() }
 }
 
 /* ---------- transport UI ---------- */
-function syncPlayheadUI(pos){ $('#playhead').style.left = (pos * state.zoom) + 'px'; }
-function updateTimeReadout(){ $('#time').textContent = fmtTime(state.playhead); }
+function syncPlayheadUI(pos){ $("#playhead").style.left = (pos * state.zoom) + "px" }
+function updateTimeReadout(){ $("#time").textContent = fmtTime(state.playhead) }
 function followPlayhead(){
-  const tl = $('#tl'), x = state.playhead * state.zoom;
-  if (x < tl.scrollLeft || x > tl.scrollLeft + tl.clientWidth - 60)
-    tl.scrollLeft = x - tl.clientWidth * 0.2;
+  const tl = $("#tl"), x = state.playhead * state.zoom
+  if (x < tl.scrollLeft || x > tl.scrollLeft + tl.clientWidth - 60) {
+    tl.scrollLeft = x - tl.clientWidth * 0.2
+  }
 }
 
 /* ---------- export: markdown + YAML front matter + media ---------- */
 // filename-safe key: keep letters/digits/# (F#m stays readable), drop path-hostile chars
-const keySlug = k => String(k || '').trim().replace(/\s+/g, '-').replace(/[\/\\?%*:|*"<>]/g, '');
+const keySlug = k => String(k || "").trim().replace(/\s+/g, "-").replace(/[/\\?%*:|*"<>]/g, "")
 // percent-encode chars that break markdown link targets (# is read as a URL fragment)
-const mdUrl = s => String(s).replace(/%/g, '%25').replace(/#/g, '%23');
+const mdUrl = s => String(s).replace(/%/g, "%25").replace(/#/g, "%23")
 // prefix as YYYY-MM-DD-[(X)bpm]-[(X)key]-title; unspecified segments are skipped
 function filePrefix(title, bpm, key, dateStr){
-  const bits = [(dateStr || isoNow()).slice(0, 10)];
-  if (bpm) bits.push(Number(bpm) + 'bpm');
-  if (keySlug(key)) bits.push(keySlug(key));
-  bits.push(slug(title));
-  return bits.join('-');
+  const bits = [ (dateStr || isoNow()).slice(0, 10) ]
+  if (bpm) bits.push(Number(bpm) + "bpm")
+  if (keySlug(key)) bits.push(keySlug(key))
+  bits.push(slug(title))
+  return bits.join("-")
 }
 // export base name; seconds stamp keeps same-day exports from colliding
-function exportBase(){ return filePrefix(state.session.name, state.session.bpm, state.session.key) + '-' + isoNow().slice(11, 19).replaceAll(':', ''); }
+function exportBase(){ return filePrefix(state.session.name, state.session.bpm, state.session.key) + "-" + isoNow().slice(11, 19).replaceAll(":", "") }
 async function buildExport(){
-  const ts = [...state.takes].sort((a, b) => a.start - b.start);
-  for (const t of ts) await ensurePeaks(t);   // decode so audio can be written as WAV
-  const used = new Set();
+  const ts = [ ...state.takes ].sort((a, b) => a.start - b.start)
+  for (const t of ts) await ensurePeaks(t)   // decode so audio can be written as WAV
+  const used = new Set()
   const entries = ts.map((t, i) => {
-    let base = String(i + 1).padStart(3, '0') + '-' + filePrefix(t.name, t.bpm, t.key, t.recordedAt), name = base, k = 2;
-    while (used.has(name)) name = base + '-' + k++;
-    used.add(name);
+    const base = String(i + 1).padStart(3, "0") + "-" + filePrefix(t.name, t.bpm, t.key, t.recordedAt)
+    let name = base, k = 2
+    while (used.has(name)) name = base + "-" + k++
+    used.add(name)
     // audio takes are written as DAW-ready 16-bit WAV when decoded; otherwise the original container
-    let mediaName, mediaData;
-    if (t.kind === 'audio' && t.buffer){ mediaName = name + '.wav'; mediaData = wavBlobFromBuffer(t.buffer); }
-    else { mediaName = name + '.' + (t.ext || 'webm'); mediaData = t.blob; }
-    return { t, name, mediaName, mediaData, md: takeMarkdown(t, mediaName) };
-  });
-  return entries;
+    let mediaName, mediaData
+    if (t.kind === "audio" && t.buffer){ mediaName = name + ".wav"; mediaData = wavBlobFromBuffer(t.buffer) }
+    else { mediaName = name + "." + (t.ext || "webm"); mediaData = t.blob }
+    return { t, name, mediaName, mediaData, md: takeMarkdown(t, mediaName) }
+  })
+  return entries
 }
 function takeMarkdown(t, mediaName){
-  const y = ['---'];
-  y.push('title: ' + q(t.name));
-  y.push('media: ' + q(mediaName));
-  y.push('start: ' + t.start.toFixed(2));
-  y.push('duration: ' + t.duration.toFixed(2));
-  y.push('recorded: ' + q(t.recordedAt));
-  if (t.bpm) y.push('bpm: ' + t.bpm);
-  if (t.key) y.push('key: ' + q(t.key));
-  const bp = barPos(t.start);
-  if (bp) y.push('bar_beat: ' + bp);
-  if (t.keep) y.push('keep: true');
-  if (t.tags && t.tags.length) y.push('tags: [' + t.tags.map(q).join(', ') + ']');
-  y.push('---', '');
-  y.push('![](' + mdUrl(mediaName) + ')', '');
-  y.push((t.notes || '').trim());
-  return y.join('\n') + '\n';
+  const y = [ "---" ]
+  y.push("title: " + q(t.name))
+  y.push("media: " + q(mediaName))
+  y.push("start: " + t.start.toFixed(2))
+  y.push("duration: " + t.duration.toFixed(2))
+  y.push("recorded: " + q(t.recordedAt))
+  if (t.bpm) y.push("bpm: " + t.bpm)
+  if (t.key) y.push("key: " + q(t.key))
+  const bp = barPos(t.start)
+  if (bp) y.push("bar_beat: " + bp)
+  if (t.keep) y.push("keep: true")
+  if (t.tags && t.tags.length) y.push("tags: [" + t.tags.map(q).join(", ") + "]")
+  y.push("---", "")
+  y.push("![](" + mdUrl(mediaName) + ")", "")
+  y.push((t.notes || "").trim())
+  return y.join("\n") + "\n"
 }
 function cuesMarkdown(){
-  const y = ['---'];
-  y.push('title: ' + q('Cues — ' + (state.session.name || 'Session ' + (state.session.created || '').slice(0, 10))));
-  y.push('cues: ' + state.cues.length);
-  if (state.session.bpm) y.push('bpm: ' + state.session.bpm);
-  y.push('---', '');
+  const y = [ "---" ]
+  y.push("title: " + q("Cues — " + (state.session.name || "Session " + (state.session.created || "").slice(0, 10))))
+  y.push("cues: " + state.cues.length)
+  if (state.session.bpm) y.push("bpm: " + state.session.bpm)
+  y.push("---", "")
   for (const c of state.cues){
-    const head = '**' + fmtClock(c.pos) + (barPos(c.pos) ? ' (bar ' + barPos(c.pos) + ')' : '') + (c.name ? ' — ' + c.name : '') + '**';
-    y.push('- ' + head + (c.notes ? '  \n  ' + c.notes.replace(/\n/g, '  \n  ') : ''));
+    const head = "**" + fmtClock(c.pos) + (barPos(c.pos) ? " (bar " + barPos(c.pos) + ")" : "") + (c.name ? " — " + c.name : "") + "**"
+    y.push("- " + head + (c.notes ? "  \n  " + c.notes.replace(/\n/g, "  \n  ") : ""))
   }
-  if (!state.cues.length) y.push('(no cues)');
-  return y.join('\n') + '\n';
+  if (!state.cues.length) y.push("(no cues)")
+  return y.join("\n") + "\n"
 }
 function sessionMarkdown(entries){
-  const s = state.session;
-  const y = ['---'];
-  y.push('title: ' + q(s.name || 'Session ' + (s.created || '').slice(0, 10)));
-  if (s.bpm) y.push('bpm: ' + s.bpm);
-  if (s.key) y.push('key: ' + q(s.key));
-  if ((s.notes || '').trim()) y.push('notes: ' + q(s.notes.trim()));
-  y.push('cues: ' + q('cues.md'));
-  y.push('created: ' + q(s.created));
-  y.push('exported: ' + q(isoNow()));
-  y.push('takes: ' + entries.length);
-  y.push('---', '', '');
+  const s = state.session
+  const y = [ "---" ]
+  y.push("title: " + q(s.name || "Session " + (s.created || "").slice(0, 10)))
+  if (s.bpm) y.push("bpm: " + s.bpm)
+  if (s.key) y.push("key: " + q(s.key))
+  if ((s.notes || "").trim()) y.push("notes: " + q(s.notes.trim()))
+  y.push("cues: " + q("cues.md"))
+  y.push("created: " + q(s.created))
+  y.push("exported: " + q(isoNow()))
+  y.push("takes: " + entries.length)
+  y.push("---", "", "")
   for (const e of entries){
-    const t = e.t, bits = [fmtClock(t.start) + '–' + fmtClock(t.start + t.duration)];
-    const bp = barPos(t.start), bpe = barPos(t.start + t.duration);
-    if (bp) bits.push((bpe && bpe !== bp ? bp + '–' + bpe : 'bar ' + bp));
-    if (t.bpm) bits.push(t.bpm + ' bpm');
-    if (t.key) bits.push(t.key);
-    if (t.keep) bits.push('keep');
-    y.push('- [' + t.name.replace(/([\[\]])/g, '\\$1') + '](' + mdUrl(e.name) + '.md) · [' + e.mediaName + '](' + mdUrl(e.mediaName) + ') — ' + bits.join(' · '));
+    const t = e.t, bits = [ fmtClock(t.start) + "–" + fmtClock(t.start + t.duration) ]
+    const bp = barPos(t.start), bpe = barPos(t.start + t.duration)
+    if (bp) bits.push((bpe && bpe !== bp ? bp + "–" + bpe : "bar " + bp))
+    if (t.bpm) bits.push(t.bpm + " bpm")
+    if (t.key) bits.push(t.key)
+    if (t.keep) bits.push("keep")
+    y.push("- [" + t.name.replace(/([[\]])/g, "\\$1") + "](" + mdUrl(e.name) + ".md) · [" + e.mediaName + "](" + mdUrl(e.mediaName) + ") — " + bits.join(" · "))
   }
-  if (state.cues.length)
-    y.push('', '- [' + state.cues.length + ' cue' + (state.cues.length > 1 ? 's' : '') + '](cues.md)');
-  return y.join('\n') + '\n';
+  if (state.cues.length) {
+    y.push("", "- [" + state.cues.length + " cue" + (state.cues.length > 1 ? "s" : "") + "](cues.md)")
+  }
+  return y.join("\n") + "\n"
 }
 function wavBlobFromBuffer(buf){
-  const ch = Math.min(2, buf.numberOfChannels), sr = buf.sampleRate, len = buf.length;
-  const bytes = 44 + len * ch * 2;
-  const ab = new ArrayBuffer(bytes), dv = new DataView(ab);
-  const W = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
-  W(0, 'RIFF'); dv.setUint32(4, bytes - 8, true); W(8, 'WAVE'); W(12, 'fmt ');
-  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, ch, true);
-  dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
-  W(36, 'data'); dv.setUint32(40, len * ch * 2, true);
-  const chans = [];
-  for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
-  let o = 44;
-  for (let i = 0; i < len; i++)
-    for (let c = 0; c < ch; c++){
-      const v = clamp(chans[c][i], -1, 1);
-      dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2;
+  const ch = Math.min(2, buf.numberOfChannels), sr = buf.sampleRate, len = buf.length
+  const bytes = 44 + len * ch * 2
+  const ab = new ArrayBuffer(bytes), dv = new DataView(ab)
+  const W = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)) }
+  W(0, "RIFF"); dv.setUint32(4, bytes - 8, true); W(8, "WAVE"); W(12, "fmt ")
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, ch, true)
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true)
+  W(36, "data"); dv.setUint32(40, len * ch * 2, true)
+  const chans = []
+  for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c))
+  let o = 44
+  for (let i = 0; i < len; i++) {
+    for (let c = 0; c < ch; c++) {
+      const v = clamp(chans[c][i], -1, 1)
+      dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2
     }
-  return new Blob([ab], { type: 'audio/wav' });
+  }
+  return new Blob([ ab ], { type: "audio/wav" })
 }
 
 /* File System Access API: write straight into a real directory */
 async function exportDirectory(){
-  const entries = await buildExport();
-  const dirName = exportBase();
-  const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
-  const sub = await dir.getDirectoryHandle(dirName, { create: true });
-  const files = [{ name: 'session.md', text: sessionMarkdown(entries) }, { name: 'cues.md', text: cuesMarkdown() }];
+  const entries = await buildExport()
+  const dirName = exportBase()
+  const dir = await window.showDirectoryPicker({ mode: "readwrite" })
+  const sub = await dir.getDirectoryHandle(dirName, { create: true })
+  const files = [ { name: "session.md", text: sessionMarkdown(entries) }, { name: "cues.md", text: cuesMarkdown() } ]
   for (const e of entries){
-    files.push({ name: e.name + '.md', text: e.md });
-    files.push({ name: e.mediaName, data: e.mediaData });
+    files.push({ name: e.name + ".md", text: e.md })
+    files.push({ name: e.mediaName, data: e.mediaData })
   }
   for (const f of files){
-    const fh = await sub.getFileHandle(f.name, { create: true });
-    const w = await fh.createWritable();
-    await w.write(f.data ?? new Blob([f.text], { type: 'text/markdown' }));
-    await w.close();
+    const fh = await sub.getFileHandle(f.name, { create: true })
+    const w = await fh.createWritable()
+    await w.write(f.data ?? new Blob([ f.text ], { type: "text/markdown" }))
+    await w.close()
   }
-  toast('exported ' + files.length + ' files to ' + dirName + '/');
+  toast("exported " + files.length + " files to " + dirName + "/")
 }
 
 /* zip fallback (stored, no compression) for browsers without the picker */
 const CRC_T = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c; }
-  return t;
-})();
-function crc32(u8){ let c = ~0; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (~c) >>> 0; }
+  const t = new Uint32Array(256)
+  for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c }
+  return t
+})()
+function crc32(u8){ let c = ~0; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (~c) >>> 0 }
 async function exportZip(){
-  const entries = await buildExport();
-  const zipFiles = [{ name: 'session.md', text: sessionMarkdown(entries) }, { name: 'cues.md', text: cuesMarkdown() }];
+  const mZip = $("#mZip"), zLabel = mZip.textContent
+  if (!state.takes.length){ toast("nothing to export yet — record something first"); return }
+  mZip.disabled = true; mZip.dataset.busy = "true"; mZip.textContent = "zipping\u2026"
+  try { await zipBuild() }
+  finally {
+    mZip.textContent = zLabel
+    mZip.removeAttribute("data-busy")
+    mZip.disabled = !state.takes.length
+  }
+}
+async function zipBuild(){
+
+  const entries = await buildExport()
+  const zipFiles = [ { name: "session.md", text: sessionMarkdown(entries) }, { name: "cues.md", text: cuesMarkdown() } ]
   for (const e of entries){
-    zipFiles.push({ name: e.name + '.md', text: e.md });
-    zipFiles.push({ name: e.mediaName, data: e.mediaData });
+    zipFiles.push({ name: e.name + ".md", text: e.md })
+    zipFiles.push({ name: e.mediaName, data: e.mediaData })
   }
-  const enc = new TextEncoder(), parts = [], central = [];
-  let offset = 0;
-  const dt = new Date();
-  const dosTime = (dt.getHours() << 11 | dt.getMinutes() << 5 | dt.getSeconds() >> 1) & 0xFFFF;
-  const dosDate = ((dt.getFullYear() - 1980) << 9 | (dt.getMonth() + 1) << 5 | dt.getDate()) & 0xFFFF;
+  const enc = new TextEncoder(), parts = [], central = []
+  let offset = 0
+  const dt = new Date()
+  const dosTime = (dt.getHours() << 11 | dt.getMinutes() << 5 | dt.getSeconds() >> 1) & 0xFFFF
+  const dosDate = ((dt.getFullYear() - 1980) << 9 | (dt.getMonth() + 1) << 5 | dt.getDate()) & 0xFFFF
   for (const f of zipFiles){
-    const data = new Uint8Array(await (f.data ?? new Blob([f.text], { type: 'text/markdown' })).arrayBuffer());
-    const name = enc.encode(f.name), crc = crc32(data);
-    const lh = new DataView(new ArrayBuffer(30));
-    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
-    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
-    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
-    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
-    parts.push(lh.buffer, name, data);
-    const ch = new DataView(new ArrayBuffer(46));
-    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
-    ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
-    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
-    ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true);
-    ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
-    central.push(ch.buffer, name);
-    offset += 30 + name.length + data.length;
+    const data = new Uint8Array(await (f.data ?? new Blob([ f.text ], { type: "text/markdown" })).arrayBuffer())
+    const name = enc.encode(f.name), crc = crc32(data)
+    const lh = new DataView(new ArrayBuffer(30))
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true)
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true)
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true)
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true)
+    parts.push(lh.buffer, name, data)
+    const ch = new DataView(new ArrayBuffer(46))
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true)
+    ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true)
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true)
+    ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true)
+    ch.setUint32(38, 0, true); ch.setUint32(42, offset, true)
+    central.push(ch.buffer, name)
+    offset += 30 + name.length + data.length
   }
-  let cdSize = 0; for (const c of central) cdSize += c.byteLength;
-  const eocd = new DataView(new ArrayBuffer(22));
-  eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(4, 0, true); eocd.setUint16(6, 0, true);
-  eocd.setUint16(8, zipFiles.length, true); eocd.setUint16(10, zipFiles.length, true);
-  eocd.setUint32(12, cdSize, true); eocd.setUint32(16, offset, true); eocd.setUint16(20, 0, true);
-  const blob = new Blob([...parts, ...central, eocd.buffer], { type: 'application/zip' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = exportBase() + '.zip';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
-  toast('zip downloaded — ' + zipFiles.length + ' files');
+  let cdSize = 0; for (const c of central) cdSize += c.byteLength
+  const eocd = new DataView(new ArrayBuffer(22))
+  eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(4, 0, true); eocd.setUint16(6, 0, true)
+  eocd.setUint16(8, zipFiles.length, true); eocd.setUint16(10, zipFiles.length, true)
+  eocd.setUint32(12, cdSize, true); eocd.setUint32(16, offset, true); eocd.setUint16(20, 0, true)
+  const blob = new Blob([ ...parts, ...central, eocd.buffer ], { type: "application/zip" })
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(blob)
+  a.download = exportBase() + ".zip"
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000)
+  toast("zip downloaded — " + zipFiles.length + " files")
 }
 async function doExport(){
-  if (!state.takes.length){ toast('nothing to export yet — record something first'); return; }
+  if (!state.takes.length){ toast("nothing to export yet — record something first"); return }
+  const mExport = $("#mExport"), label = mExport.textContent
+  mExport.disabled = true; mExport.dataset.busy = "true"; mExport.textContent = "packing\u2026"
   try {
     if (window.showDirectoryPicker){
-      try { await exportDirectory(); return; }
-      catch (e){ if (e && e.name === 'AbortError') return; console.warn('directory export failed, falling back to zip', e); }
+      try { await exportDirectory(); return }
+      catch (e){ if (e && e.name === "AbortError") return; console.warn("directory export failed, falling back to zip", e) }
     }
-    await exportZip();
-  } catch (err){ toast('export failed: ' + (err.message || err)); }
+    await exportZip()
+  } catch (err){ toast("export failed: " + (err.message || err)) }
+  finally {
+    mExport.textContent = label
+    mExport.removeAttribute("data-busy")
+    mExport.disabled = !state.takes.length
+  }
 }
 
 /* ---------- wiring ---------- */
 function setZoom(z){
-  state.zoom = clamp(z, 8, 200);
-  refresh();
+  state.zoom = clamp(z, 8, 200)
+  refresh()
 }
-const saveSessionMeta = debounce(() => idbSetMeta('session', state.session), 300);
+const saveSessionMeta = debounce(() => idbSetMeta("session", state.session), 300)
 
-/* click-to-edit chips: small label expands into an input on click */
-function chipValue(chip){ return chip.id === 'bpmChip' ? (state.session.bpm ?? '') : (state.session.key || ''); }
-function renderChips(){
-  const b = $('#bpmChip'), k = $('#keyChip');
-  if (b) b.querySelector('.cv').textContent = state.session.bpm ? state.session.bpm + ' bpm' : '';
-  if (k) k.querySelector('.cv').textContent = state.session.key || '';
+/* ---------- masthead & session meta ---------- */
+function renderMasthead(){
+  const s = state.session
+  $("#mastTitle").textContent = s.name || ""
+  $("#mastBpm").innerHTML = s.bpm ? "<b>" + esc(String(s.bpm)) + "</b> BPM" : ""
+  $("#mastKey").innerHTML = s.key ? "<b>" + esc(s.key) + "</b>" : ""
+}
+// click the title to rename the session in place
+let renamedAt = 0
+function startRename(){
+  if (document.body.classList.contains("renaming")) return
+  document.body.classList.add("renaming")
+  const inp = el("input")
+  inp.type = "text"; inp.id = "titleEdit"; inp.placeholder = "untitled session"
+  inp.value = state.session.name
+  inp.setAttribute("aria-label", "Session title")
+  $("#masthead").appendChild(inp)
+  inp.focus(); inp.select()
+  const done = commit => {
+    if (commit){ state.session.name = inp.value.trim(); saveSessionMeta() }
+    renamedAt = performance.now()
+    document.body.classList.remove("renaming")
+    inp.remove()
+    renderMasthead()
+  }
+  inp.addEventListener("blur", () => done(true))
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Enter") done(true)
+    else if (e.key === "Escape") done(false)
+  })
 }
 // session bpm changed: bar positions & metadata readouts shift — refresh visible text
 function onBpmChange(){
-  const t = takeById(state.selectedId);
-  if (t && t.el) updateBarText(t);
-  const pm = $('#panel .pmeta');
-  if (t && pm) pm.innerHTML = pmetaHTML(t);
-}
-function wireChip(chip, commit){
-  const fld = chip.querySelector('.fld');
-  const close = () => {
-    if (!chip.classList.contains('edit')) return;
-    commit(fld.value);
-    chip.classList.remove('edit');
-    renderChips();
-  };
-  const open = () => {
-    chip.classList.add('edit');
-    fld.value = chipValue(chip);
-    fld.focus(); fld.select();
-  };
-  chip.addEventListener('click', e => {
-    if (e.target === fld) return;
-    if (!chip.classList.contains('edit')){ e.preventDefault(); open(); }
-  });
-  chip.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === 'Escape'){ e.preventDefault(); close(); }
-  });
-  fld.addEventListener('blur', close);
-  fld.addEventListener('input', () => commit(fld.value));   // live-commit while typing
+  const t = takeById(state.selectedId)
+  if (t && t.el) updateBarText(t)
+  const pm = $("#vMeta")
+  if (t && pm && ovlIsOpen("#viewOvl")) pm.innerHTML = pmetaHTML(t)
+  if (cueById(state.selectedCueId)) refreshViewIfCue()
+  drawRuler()
 }
 function wire(){
-  $('#recBtn').addEventListener('click', toggleRecord);
-  $('#playBtn').addEventListener('click', togglePlay);
-  $('#videoChk').addEventListener('change', releaseMedia);   // device mode changed — let the next take re-request
-  $('#zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.4));
-  $('#zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.4));
-  $('#exportBtn').addEventListener('click', doExport);
-  $('#zipBtn').addEventListener('click', exportZip);
-  $('#newBtn').addEventListener('click', newSession);
-  $('#sessionName').addEventListener('input', e => { state.session.name = e.target.value; saveSessionMeta(); });
-  wireChip($('#bpmChip'), v => {
-    state.session.bpm = v === '' ? null : (parseFloat(v) || null);
-    saveSessionMeta(); onBpmChange();
-  });
-  wireChip($('#keyChip'), v => { state.session.key = v.trim(); saveSessionMeta(); });
+  $("#recBtn").addEventListener("click", toggleRecord)
+  $("#playBtn").addEventListener("click", togglePlay)
+  $("#videoChk").addEventListener("change", releaseMedia)   // device mode changed — let the next take re-request
+  $("#zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.4))
+  $("#zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.4))
+
+  // masthead: click the title to rename; burger opens the menu
+  $("#masthead").addEventListener("click", e => {
+    if (e.target.closest(".m-chip")) return
+    if (performance.now() - renamedAt < 250) return   // the blur that committed a rename also lands here
+    startRename()
+  })
+  $("#mastTitle").addEventListener("keydown", e => { if (e.key === "Enter") startRename() })
+  $("#burger").addEventListener("click", () => { ovlIsOpen("#menuOvl") ? closeMenu() : openMenu() })
+
+  // menu wiring
+  buildKeyGrids()
+  document.querySelectorAll("[data-close]").forEach(n => n.addEventListener("click", () => {
+    if (n.dataset.close === "menu") closeMenu(); else dismissView()
+  }))
+  $("#mNew").addEventListener("click", () => { closeMenu(); newSession() })
+  $("#mExport").addEventListener("click", () => doExport())
+  $("#mZip").addEventListener("click", () => exportZip())
+  $("#bpmClear").addEventListener("click", () => { state.session.bpm = null; saveSessionMeta(); syncMenu(); renderMasthead(); onBpmChange() })
+  $("#keyClear").addEventListener("click", () => { state.session.key = ""; saveSessionMeta(); syncMenu(); renderMasthead() })
+  holdable($("#bpmDown"), () => bpmStep(-1))
+  holdable($("#bpmUp"), () => bpmStep(1))
+  $("#mNotes").addEventListener("input", e => { state.session.notes = e.target.value; saveSessionMeta() })
+  trapFocus($("#menuPanel"))
+  trapFocus($("#viewPanel"))
 
   // scrub-seek on the ruler and empty timeline space; a click (no drag) deselects
-  // the take and shows session notes
-  let downX = 0, downY = 0;
-  $('#content').addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    downX = e.clientX; downY = e.clientY;
-    const onBar = !!e.target.closest('.bar');
-    const wasPlaying = state.playing;
-    if (wasPlaying) pausePlayback();
-    const tl = $('#tl');
+  // the take and closes the detail view
+  let downX = 0, downY = 0
+  $("#content").addEventListener("pointerdown", e => {
+    if (e.button !== 0) return
+    downX = e.clientX; downY = e.clientY
+    const onBar = !!e.target.closest(".bar")
+    const wasPlaying = state.playing
+    if (wasPlaying) pausePlayback()
+    const tl = $("#tl")
     const seek = ev => {
-      const r = tl.getBoundingClientRect();
-      seekTo(Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom));
-    };
-    seek(e);
-    const mv = ev => seek(ev);
-    window.addEventListener('pointermove', mv);
-    window.addEventListener('pointerup', ev => {
-      window.removeEventListener('pointermove', mv);
-      const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > 4;
-      if (!onBar && !moved && (state.selectedId || state.selectedCueId)){ select(null); }
-      else if (wasPlaying && !moved) startPlayback();
-    }, { once: true });
-  });
+      const r = tl.getBoundingClientRect()
+      seekTo(Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom))
+    }
+    seek(e)
+    const mv = ev => seek(ev)
+    window.addEventListener("pointermove", mv)
+    window.addEventListener("pointerup", ev => {
+      window.removeEventListener("pointermove", mv)
+      const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > 4
+      if (!onBar && !moved && (state.selectedId || state.selectedCueId)){ dismissView() }
+      else if (wasPlaying && !moved) startPlayback()
+    }, { once: true })
+  })
 
-  $('#tl').addEventListener('scroll', drawRuler);
+  $("#tl").addEventListener("scroll", drawRuler)
 
   // double-click the ruler (or timeline background) to drop a cue
   const cueAt = ev => {
-    const tl = $('#tl');
-    const r = tl.getBoundingClientRect();
-    return Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom);
-  };
-  $('#rulerWrap').addEventListener('dblclick', e => { e.preventDefault(); addCue(cueAt(e)); });
-  $('#content').addEventListener('dblclick', e => {
-    if (e.target.closest('.bar') || e.target.closest('.cue')) return;
-    addCue(cueAt(e));
-  });
+    const tl = $("#tl")
+    const r = tl.getBoundingClientRect()
+    return Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom)
+  }
+  $("#rulerWrap").addEventListener("dblclick", e => { e.preventDefault(); addCue(cueAt(e)) })
+  $("#content").addEventListener("dblclick", e => {
+    if (e.target.closest(".bar") || e.target.closest(".cue")) return
+    addCue(cueAt(e))
+  })
 
-  window.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea, select')) return;
-    if (e.code === 'Space'){ e.preventDefault(); togglePlay(); }
-    else if (e.key === 'r' || e.key === 'R') toggleRecord();
-  });
-  window.addEventListener('beforeunload', e => {
-    releaseMedia();
-    if (rec){ e.preventDefault(); e.returnValue = ''; }
-  });
-  window.addEventListener('resize', debounce(() => { sizeRuler(); drawRuler(); }, 120));
+  window.addEventListener("keydown", e => {
+    if (e.target.matches("input, textarea, select")) return
+    if (e.key === "Escape"){
+      if (ovlIsOpen("#menuOvl")) closeMenu()
+      else if (ovlIsOpen("#viewOvl")) dismissView()
+      return
+    }
+    if (ovlIsOpen("#menuOvl") || ovlIsOpen("#viewOvl")) return
+    if (e.code === "Space"){ e.preventDefault(); togglePlay() }
+    else if (e.key === "r" || e.key === "R") toggleRecord()
+  })
+  window.addEventListener("beforeunload", e => {
+    releaseMedia()
+    if (rec){ e.preventDefault(); e.returnValue = "" }
+  })
+  window.addEventListener("resize", debounce(() => { sizeRuler(); drawRuler() }, 120))
 }
 function newSession(){
-  if (state.takes.length && !confirm('Start a new session? All current takes are deleted from this browser.')) return;
-  pausePlayback();
-  releaseMedia();
-  for (const t of state.takes) idbDelTake(t.id);
-  play.videos.forEach(v => { URL.revokeObjectURL(v.src); v.remove(); });
-  play.videos.clear();
-  state.takes = [];
-  state.cues = [];
-  state.selectedId = null;
-  state.selectedCueId = null;
-  state.playhead = 0;
-  state.session = { name: '', bpm: null, key: '', notes: '', created: isoNow() };
-  idbSetMeta('session', state.session);
-  idbSetMeta('cues', state.cues);
-  $('#sessionName').value = '';
-  renderChips();
-  refresh(); renderPanel();
+  if (state.takes.length && !confirm("Start a new session? All current takes are deleted from this browser.")) return
+  pausePlayback()
+  releaseMedia()
+  for (const t of state.takes) idbDelTake(t.id)
+  play.videos.forEach(v => { URL.revokeObjectURL(v.src); v.remove() })
+  play.videos.clear()
+  state.takes = []
+  state.cues = []
+  state.selectedId = null
+  state.selectedCueId = null
+  state.playhead = 0
+  state.session = { name: "", bpm: null, key: "", notes: "", created: isoNow() }
+  idbSetMeta("session", state.session)
+  idbSetMeta("cues", state.cues)
+  closeView()
+  renderMasthead()
+  refresh()
 }
 
 /* ---------- boot ---------- */
 async function init(){
-  wire();
-  try { await idbOpen(); }
-  catch (e){ toast('storage unavailable — takes will not survive a reload'); }
+  wire()
+  try { await idbOpen() }
+  catch (e){ toast("storage unavailable — takes will not survive a reload") }
   if (db){
-    const s = await idbGetMeta('session');
-    if (s && s.created) state.session = s;
-    const cs = await idbGetMeta('cues');
-    if (Array.isArray(cs)) state.cues = cs.sort((a, b) => a.pos - b.pos);
-    state.takes = (await idbAllTakes()).sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : 1));
-    state.takes.forEach(t => { t.buffer = null; t.peaks = null; t.el = null; });
+    const s = await idbGetMeta("session")
+    if (s && s.created) state.session = s
+    const cs = await idbGetMeta("cues")
+    if (Array.isArray(cs)) state.cues = cs.sort((a, b) => a.pos - b.pos)
+    state.takes = (await idbAllTakes()).sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : 1))
+    state.takes.forEach(t => { t.buffer = null; t.peaks = null; t.el = null })
   }
-  $('#sessionName').value = state.session.name || '';
-  renderChips();
-  refresh(); renderPanel(); updateTimeReadout();
-  state.takes.forEach(t => ensurePeaks(t));
-  if (state.takes.length) toast(state.takes.length + ' take' + (state.takes.length > 1 ? 's' : '') + ' restored');
+  renderMasthead()
+  refresh(); updateTimeReadout()
+  state.takes.forEach(t => ensurePeaks(t))
+  if (state.takes.length) toast(state.takes.length + " take" + (state.takes.length > 1 ? "s" : "") + " restored")
 }
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener("DOMContentLoaded", init)
 </script>
 </body>
 </html>

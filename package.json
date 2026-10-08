@@ -1,0 +1,15 @@
+{
+  "name": "rough-cut",
+  "private": true,
+  "scripts": {
+    "lint": "node scripts/lint.js",
+    "lint:fix": "node scripts/lint.js --fix"
+  },
+  "devDependencies": {
+    "@37signals/eslint-config": "^0.0.2",
+    "@37signals/stylelint-config-scss": "^0.0.3",
+    "eslint": "^9.39.5",
+    "html-validate": "^11.16.2",
+    "stylelint": "^15.11.0"
+  }
+}
