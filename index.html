@@ -584,6 +584,31 @@ function deleteTake(id){
 }
 
 /* ---------- recording ---------- */
+/* live-device cache: keep the granted stream around between takes so the browser
+   doesn't re-prompt for mic/camera on every take. Released when the video mode
+   changes, the session resets, or the user revokes the device mid-session. */
+let media = null;
+function releaseMedia(){
+  if (!media) return;
+  media.stream.getTracks().forEach(tr => tr.stop());
+  media = null;
+}
+async function getMedia(wantVideo){
+  if (media){
+    const allLive = media.stream.getTracks().every(tr => tr.readyState === 'live');
+    if (media.hasVideo === wantVideo && allLive) return media.stream;
+    releaseMedia();                    // mode switched or a track died — request fresh
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+  });
+  media = { stream, hasVideo: !!stream.getVideoTracks().length };
+  stream.getTracks().forEach(tr => tr.addEventListener('ended', () => {
+    if (media && media.stream === stream) media = null;   // revoked / unplugged
+  }));
+  return stream;
+}
 function pickMime(kind){
   if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
   const list = kind === 'video'
@@ -603,12 +628,8 @@ async function startRecording(){
   if (rec) return;
   const wantVideo = $('#videoChk').checked;
   let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
-    });
-  } catch (err){ toast('mic/camera unavailable: ' + (err.name || err.message)); return; }
+  try { stream = await getMedia(wantVideo); }
+  catch (err){ toast('mic/camera unavailable: ' + (err.name || err.message)); return; }
   ensureCtx(); try { await audioCtx.resume(); } catch (e) {}
   const kind = stream.getVideoTracks().length ? 'video' : 'audio';
   const mime = pickMime(kind);
@@ -625,7 +646,6 @@ async function startRecording(){
     const r = rec; if (!r) return;
     const blob = new Blob(r.chunks, { type: r.recorder.mimeType || 'audio/webm' });
     const dur = (performance.now() - r.startWall) / 1000;
-    r.stream.getTracks().forEach(tr => tr.stop());
     cleanupRecUI(r);
     rec = null;
     document.body.classList.remove('recording');
@@ -989,6 +1009,7 @@ function wireChip(chip, commit){
 function wire(){
   $('#recBtn').addEventListener('click', toggleRecord);
   $('#playBtn').addEventListener('click', togglePlay);
+  $('#videoChk').addEventListener('change', releaseMedia);   // device mode changed — let the next take re-request
   $('#zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.4));
   $('#zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.4));
   $('#exportBtn').addEventListener('click', doExport);
@@ -1034,6 +1055,7 @@ function wire(){
     else if (e.key === 'r' || e.key === 'R') toggleRecord();
   });
   window.addEventListener('beforeunload', e => {
+    releaseMedia();
     if (rec){ e.preventDefault(); e.returnValue = ''; }
   });
   window.addEventListener('resize', debounce(() => { sizeRuler(); drawRuler(); }, 120));
@@ -1041,6 +1063,7 @@ function wire(){
 function newSession(){
   if (state.takes.length && !confirm('Start a new session? All current takes are deleted from this browser.')) return;
   pausePlayback();
+  releaseMedia();
   for (const t of state.takes) idbDelTake(t.id);
   play.videos.forEach(v => { URL.revokeObjectURL(v.src); v.remove(); });
   play.videos.clear();
