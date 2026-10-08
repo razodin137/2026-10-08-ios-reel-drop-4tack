@@ -168,6 +168,26 @@ body.recording #meter{display:block}
   position:absolute; top:0; bottom:0; width:2px;
   background:var(--accent); z-index:5; pointer-events:none;
 }
+
+/* ---------- cues ---------- */
+#cues{position:absolute; top:0; left:0; right:0; height:30px; z-index:7; pointer-events:none}
+.cue{
+  position:absolute; top:0; width:14px; height:100%; margin-left:-7px;
+  pointer-events:auto; cursor:grab; touch-action:none;
+}
+.cue::before{
+  content:''; position:absolute; left:6px; top:13px; bottom:0; width:2px;
+  background:var(--ink-dim);
+}
+.cue::after{
+  content:''; position:absolute; left:2px; top:2px; width:10px; height:10px;
+  border-radius:2px; background:var(--panel-2); border:2px solid var(--ink-dim);
+  transform:rotate(45deg); box-sizing:border-box;
+}
+.cue:hover::before{background:var(--ink)}
+.cue:hover::after{border-color:var(--ink)}
+.cue.selected::before{background:var(--accent)}
+.cue.selected::after{border-color:var(--accent); background:var(--accent)}
 #empty{
   position:absolute; inset:0; display:flex;
   align-items:center; justify-content:center;
@@ -198,6 +218,7 @@ body.recording #meter{display:block}
   border-radius:var(--r); border:1px solid var(--line);
 }
 #panel.empty{color:var(--ink-dim); font-size:12.5px; align-items:center; min-height:52px}
+#panel.cue-mode{align-items:flex-start}
 #sessionNotes{
   flex:1; min-width:200px; border:none; background:transparent;
   font:13px/1.45 var(--font-ui); color:var(--ink-dim); resize:none;
@@ -257,6 +278,7 @@ body.recording #meter{display:block}
 <main id="tl">
   <div id="content">
     <div id="rulerWrap"><canvas id="ruler"></canvas></div>
+    <div id="cues"></div>
     <div id="lanes"></div>
     <div id="playhead"></div>
     <div id="empty">press record — everything else can wait</div>
@@ -303,7 +325,9 @@ const LANES = [ // muted, distinguishable hues (oklch hue angles)
 const state = {
   session: { name: '', bpm: null, key: '', notes: '', created: isoNow() },
   takes: [],            // {id,name,kind,start,duration,recordedAt,bpm,key,tags,notes,keep,mime,ext,blob,buffer,peaks,lane}
+  cues: [],             // {id,pos,name,notes}
   selectedId: null,
+  selectedCueId: null,
   playhead: 0,
   zoom: 40,             // px per second
   playing: false,
@@ -350,6 +374,7 @@ function idbGetMeta(k){
     rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
   });
 }
+const saveCues = debounce(() => { if (db) try { db.transaction('meta', 'readwrite').objectStore('meta').put(state.cues, 'cues'); } catch (e) {} }, 300);
 
 /* ---------- toasts ---------- */
 let toastT;
@@ -406,6 +431,7 @@ function renderAll(){
   const lanes = $('#lanes'); lanes.innerHTML = '';
   for (const t of state.takes) lanes.appendChild(barEl(t));
   $('#empty').style.display = state.takes.length ? 'none' : 'flex';
+  renderCues();
   sizeRuler(); drawRuler(); syncPlayheadUI(state.playhead);
 }
 function refresh(){ layout(); renderAll(); }
@@ -489,6 +515,85 @@ function drawRuler(){
   }
 }
 
+/* ---------- cues ---------- */
+function cueById(id){ return state.cues.find(c => c.id === id); }
+function renderCues(){
+  const wrap = $('#cues');
+  wrap.innerHTML = '';
+  for (const c of state.cues){
+    const d = el('div', 'cue');
+    d.dataset.id = c.id;
+    d.style.left = (c.pos * state.zoom) + 'px';
+    if (state.selectedCueId === c.id) d.classList.add('selected');
+    d.title = cueTitle(c);
+    attachCueEvents(d, c);
+    wrap.appendChild(d);
+  }
+}
+function cueTitle(c){
+  const bits = [fmtClock(c.pos)];
+  const bp = barPos(c.pos);
+  if (bp) bits.push('bar ' + bp);
+  if (c.name) bits.push(c.name);
+  return bits.join(' · ');
+}
+function syncCueDom(c){
+  const d = $('#cues .cue[data-id="' + c.id + '"]');
+  if (d) d.title = cueTitle(c);
+}
+function attachCueEvents(d, c){
+  let px0 = 0, p0 = 0, moved = false, dragging = false;
+  d.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    px0 = e.clientX; p0 = c.pos; moved = false; dragging = true;
+    try { d.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  d.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - px0;
+    if (Math.abs(dx) > 3) moved = true;
+    if (moved){
+      c.pos = Math.max(0, p0 + dx / state.zoom);
+      d.style.left = (c.pos * state.zoom) + 'px';
+    }
+  });
+  d.addEventListener('pointerup', () => {
+    dragging = false;
+    if (moved){ saveCues(); renderCues(); d.title = cueTitle(c); renderPanelIfCue(); }
+    else selectCue(c.id);
+  });
+  d.addEventListener('dblclick', () => {});   // dblclick on ruler handles creation
+}
+function selectCue(id){
+  state.selectedId = null;
+  document.querySelectorAll('.bar.selected').forEach(b => b.classList.remove('selected'));
+  state.selectedCueId = id;
+  renderCues();
+  renderPanel();
+}
+function renderPanelIfCue(){
+  if (state.selectedCueId && !takeById(state.selectedId)) renderPanel();
+}
+function addCue(pos){
+  const c = { id: uid(), pos: Math.max(0, pos), name: '', notes: '' };
+  state.cues.push(c);
+  state.cues.sort((a, b) => a.pos - b.pos);
+  saveCues();
+  renderCues();
+  selectCue(c.id);
+  return c;
+}
+function deleteCue(id){
+  const i = state.cues.findIndex(c => c.id === id);
+  if (i < 0) return;
+  state.cues.splice(i, 1);
+  if (state.selectedCueId === id) state.selectedCueId = null;
+  saveCues();
+  renderCues();
+  renderPanel();
+}
+
 /* ---------- bar drag & select ---------- */
 function attachBarEvents(b, t){
   let px0 = 0, s0 = 0, moved = false, dragging = false;
@@ -518,6 +623,8 @@ function attachBarEvents(b, t){
 /* ---------- select & metadata panel ---------- */
 function select(id){
   state.selectedId = id;
+  state.selectedCueId = null;
+  renderCues();
   document.querySelectorAll('.bar.selected').forEach(b => b.classList.remove('selected'));
   const t = takeById(id);
   if (t && t.el){
@@ -535,12 +642,33 @@ function pmetaHTML(t){
 function renderPanel(){
   if (panelUrl){ URL.revokeObjectURL(panelUrl); panelUrl = null; }
   const p = $('#panel');
+  const cue = cueById(state.selectedCueId);
+  if (cue){
+    p.classList.remove('empty');
+    p.classList.add('cue-mode');
+    p.innerHTML =
+      '<label class="f"><span>cue</span><input id="cName" type="text" value="' + esc(cue.name) + '" placeholder="cue name"></label>' +
+      '<label class="f"><span>time</span><input id="cPos" type="number" min="0" step="any" value="' + cue.pos.toFixed(2) + '"></label>' +
+      '<label class="f grow"><span>notes</span><textarea id="cNotes" rows="2" placeholder="what happens here…">' + esc(cue.notes) + '</textarea></label>' +
+      '<div class="pmeta">' + fmtClock(cue.pos) + (barPos(cue.pos) ? ' · bar ' + barPos(cue.pos) : '') + '<br>double-click ruler to add another</div>' +
+      '<button id="cDelete" class="danger">delete</button>';
+    $('#cName').addEventListener('input', e => { cue.name = e.target.value; saveCues(); syncCueDom(cue); });
+    $('#cPos').addEventListener('input', e => {
+      cue.pos = Math.max(0, parseFloat(e.target.value) || 0);
+      state.cues.sort((a, b) => a.pos - b.pos);
+      saveCues(); renderCues();
+    });
+    $('#cNotes').addEventListener('input', e => { cue.notes = e.target.value; saveCues(); });
+    $('#cDelete').addEventListener('click', () => deleteCue(cue.id));
+    return;
+  }
+  p.classList.remove('cue-mode');
   const t = takeById(state.selectedId);
   if (!t){
     p.classList.add('empty');
     p.innerHTML =
       '<div class="f" style="flex:1"><span class="slabel">session notes</span>' +
-      '<textarea id="sessionNotes" rows="2" placeholder="notes for the whole session — click a take to edit its details"></textarea></div>';
+      '<textarea id="sessionNotes" rows="2" placeholder="notes for the whole session — click a take to edit its details, double-click the ruler to add a cue"></textarea></div>';
     const ta = $('#sessionNotes');
     ta.value = state.session.notes || '';
     ta.addEventListener('input', e => { state.session.notes = e.target.value; saveSessionMeta(); });
@@ -839,6 +967,19 @@ function takeMarkdown(t, mediaName){
   y.push((t.notes || '').trim());
   return y.join('\n') + '\n';
 }
+function cuesMarkdown(){
+  const y = ['---'];
+  y.push('title: ' + q('Cues — ' + (state.session.name || 'Session ' + (state.session.created || '').slice(0, 10))));
+  y.push('cues: ' + state.cues.length);
+  if (state.session.bpm) y.push('bpm: ' + state.session.bpm);
+  y.push('---', '');
+  for (const c of state.cues){
+    const head = '**' + fmtClock(c.pos) + (barPos(c.pos) ? ' (bar ' + barPos(c.pos) + ')' : '') + (c.name ? ' — ' + c.name : '') + '**';
+    y.push('- ' + head + (c.notes ? '  \n  ' + c.notes.replace(/\n/g, '  \n  ') : ''));
+  }
+  if (!state.cues.length) y.push('(no cues)');
+  return y.join('\n') + '\n';
+}
 function sessionMarkdown(entries){
   const s = state.session;
   const y = ['---'];
@@ -846,6 +987,7 @@ function sessionMarkdown(entries){
   if (s.bpm) y.push('bpm: ' + s.bpm);
   if (s.key) y.push('key: ' + q(s.key));
   if ((s.notes || '').trim()) y.push('notes: ' + q(s.notes.trim()));
+  y.push('cues: ' + q('cues.md'));
   y.push('created: ' + q(s.created));
   y.push('exported: ' + q(isoNow()));
   y.push('takes: ' + entries.length);
@@ -859,6 +1001,8 @@ function sessionMarkdown(entries){
     if (t.keep) bits.push('keep');
     y.push('- [' + t.name.replace(/([\[\]])/g, '\\$1') + '](' + mdUrl(e.name) + '.md) · [' + e.mediaName + '](' + mdUrl(e.mediaName) + ') — ' + bits.join(' · '));
   }
+  if (state.cues.length)
+    y.push('', '- [' + state.cues.length + ' cue' + (state.cues.length > 1 ? 's' : '') + '](cues.md)');
   return y.join('\n') + '\n';
 }
 function wavBlobFromBuffer(buf){
@@ -887,7 +1031,7 @@ async function exportDirectory(){
   const dirName = exportBase();
   const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
   const sub = await dir.getDirectoryHandle(dirName, { create: true });
-  const files = [{ name: 'session.md', text: sessionMarkdown(entries) }];
+  const files = [{ name: 'session.md', text: sessionMarkdown(entries) }, { name: 'cues.md', text: cuesMarkdown() }];
   for (const e of entries){
     files.push({ name: e.name + '.md', text: e.md });
     files.push({ name: e.mediaName, data: e.mediaData });
@@ -910,7 +1054,7 @@ const CRC_T = (() => {
 function crc32(u8){ let c = ~0; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (~c) >>> 0; }
 async function exportZip(){
   const entries = await buildExport();
-  const zipFiles = [{ name: 'session.md', text: sessionMarkdown(entries) }];
+  const zipFiles = [{ name: 'session.md', text: sessionMarkdown(entries) }, { name: 'cues.md', text: cuesMarkdown() }];
   for (const e of entries){
     zipFiles.push({ name: e.name + '.md', text: e.md });
     zipFiles.push({ name: e.mediaName, data: e.mediaData });
@@ -1042,12 +1186,24 @@ function wire(){
     window.addEventListener('pointerup', ev => {
       window.removeEventListener('pointermove', mv);
       const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > 4;
-      if (!onBar && !moved && state.selectedId){ select(null); }
+      if (!onBar && !moved && (state.selectedId || state.selectedCueId)){ select(null); }
       else if (wasPlaying && !moved) startPlayback();
     }, { once: true });
   });
 
   $('#tl').addEventListener('scroll', drawRuler);
+
+  // double-click the ruler (or timeline background) to drop a cue
+  const cueAt = ev => {
+    const tl = $('#tl');
+    const r = tl.getBoundingClientRect();
+    return Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom);
+  };
+  $('#rulerWrap').addEventListener('dblclick', e => { e.preventDefault(); addCue(cueAt(e)); });
+  $('#content').addEventListener('dblclick', e => {
+    if (e.target.closest('.bar') || e.target.closest('.cue')) return;
+    addCue(cueAt(e));
+  });
 
   window.addEventListener('keydown', e => {
     if (e.target.matches('input, textarea, select')) return;
@@ -1068,10 +1224,13 @@ function newSession(){
   play.videos.forEach(v => { URL.revokeObjectURL(v.src); v.remove(); });
   play.videos.clear();
   state.takes = [];
+  state.cues = [];
   state.selectedId = null;
+  state.selectedCueId = null;
   state.playhead = 0;
   state.session = { name: '', bpm: null, key: '', notes: '', created: isoNow() };
   idbSetMeta('session', state.session);
+  idbSetMeta('cues', state.cues);
   $('#sessionName').value = '';
   renderChips();
   refresh(); renderPanel();
@@ -1085,6 +1244,8 @@ async function init(){
   if (db){
     const s = await idbGetMeta('session');
     if (s && s.created) state.session = s;
+    const cs = await idbGetMeta('cues');
+    if (Array.isArray(cs)) state.cues = cs.sort((a, b) => a.pos - b.pos);
     state.takes = (await idbAllTakes()).sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : 1));
     state.takes.forEach(t => { t.buffer = null; t.peaks = null; t.el = null; });
   }
