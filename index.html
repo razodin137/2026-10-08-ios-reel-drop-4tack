@@ -51,11 +51,13 @@ input::placeholder, textarea::placeholder{color:var(--ink-dim)}
 
 /* ---------- toolbar ---------- */
 #top{
-  display:flex; align-items:center; gap:var(--s3);
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+  gap:var(--s2) var(--s3);
   padding:var(--s2) var(--s4);
   background:var(--panel); border-bottom:1px solid var(--line);
-  flex-wrap:wrap;
 }
+.tg{display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; min-width:0}
+.t-right{justify-content:flex-end}
 #recBtn{
   width:42px; height:42px; border-radius:50%;
   background:var(--accent); border:none; position:relative; flex:none;
@@ -107,16 +109,22 @@ body.recording #meter{display:block}
   transform:scaleX(var(--lvl,0)); transform-origin:left;
 }
 #sessionName{width:190px}
-#sessBpm{width:62px; text-align:center}
-#sessKey{width:62px; text-align:center}
-#vidChip{
-  display:flex; align-items:center; gap:6px;
+.chip{
+  display:flex; align-items:center; gap:5px;
   font-size:12px; color:var(--ink-dim);
   background:var(--panel-2); border:1px solid var(--line);
-  border-radius:var(--r); padding:5px 10px; cursor:pointer; flex:none;
+  border-radius:var(--r); padding:4px 9px; cursor:pointer; flex:none;
 }
-#vidChip input{accent-color:var(--accent)}
-#top .spacer{flex:1}
+.chip:hover{color:var(--ink)}
+.chip input[type=checkbox]{accent-color:var(--accent)}
+.chip .cv{font-weight:600; color:var(--ink)}
+.chip.edit .cv{display:none}
+.chip .fld{
+  display:none; width:0; padding:0; border:none; background:transparent;
+  font:12px var(--font-ui); color:var(--ink);
+}
+.chip.edit .fld{display:block; width:62px; padding:0 2px}
+.chip.edit{border-color:var(--ink-dim)}
 #zoomOut,#zoomIn{width:32px; padding:5px 0; flex:none}
 #zipBtn,#newBtn{font-size:12px; color:var(--ink-dim)}
 
@@ -190,6 +198,12 @@ body.recording #meter{display:block}
   border-radius:var(--r); border:1px solid var(--line);
 }
 #panel.empty{color:var(--ink-dim); font-size:12.5px; align-items:center; min-height:52px}
+#sessionNotes{
+  flex:1; min-width:200px; border:none; background:transparent;
+  font:13px/1.45 var(--font-ui); color:var(--ink-dim); resize:none;
+}
+#sessionNotes:focus{color:var(--ink)}
+#panel .slabel{font-size:10.5px; color:var(--ink-dim); letter-spacing:.04em}
 
 /* ---------- misc ---------- */
 #camPreview{
@@ -213,22 +227,31 @@ body.recording #meter{display:block}
 <body>
 
 <header id="top">
-  <button id="recBtn" title="Record (R)" aria-label="Record"></button>
-  <button id="playBtn" title="Play / pause (Space)" aria-label="Play">
-    <span class="tri"></span><span class="bars"></span>
-  </button>
-  <span id="time">0:00.0</span>
-  <div id="meter"><div id="meterFill"></div></div>
-  <input id="sessionName" type="text" placeholder="untitled session" aria-label="Session name">
-  <input id="sessBpm" type="number" min="0" step="any" placeholder="bpm" aria-label="Session bpm" title="Session bpm — feeds export filenames">
-  <input id="sessKey" type="text" placeholder="key" aria-label="Session key" title="Session key — feeds export filenames">
-  <label id="vidChip" title="Record video too"><input id="videoChk" type="checkbox"> video</label>
-  <span class="spacer"></span>
-  <button id="zoomOut" title="Zoom out">−</button>
-  <button id="zoomIn" title="Zoom in">+</button>
-  <button id="exportBtn" title="Export takes as markdown + media into a folder">export</button>
-  <button id="zipBtn" title="Download everything as one .zip">zip</button>
-  <button id="newBtn" title="Delete all takes, start fresh">new</button>
+  <div class="tg t-left">
+    <button id="playBtn" title="Play / pause (Space)" aria-label="Play">
+      <span class="tri"></span><span class="bars"></span>
+    </button>
+    <span id="time">0:00.0</span>
+    <div id="meter"><div id="meterFill"></div></div>
+  </div>
+  <div class="tg t-center">
+    <label class="chip" id="vidChip" title="Record video too"><input id="videoChk" type="checkbox"> video</label>
+    <button id="recBtn" title="Record (R)" aria-label="Record"></button>
+    <input id="sessionName" type="text" placeholder="untitled session" aria-label="Session name">
+    <div class="chip" id="bpmChip" role="button" tabindex="0" title="Session bpm">
+      <span class="lb">bpm</span><span class="cv"></span><input class="fld" type="number" min="0" step="any" placeholder="—" aria-label="Session bpm">
+    </div>
+    <div class="chip" id="keyChip" role="button" tabindex="0" title="Session key">
+      <span class="lb">key</span><span class="cv"></span><input class="fld" type="text" placeholder="—" aria-label="Session key">
+    </div>
+  </div>
+  <div class="tg t-right">
+    <button id="zoomOut" title="Zoom out">−</button>
+    <button id="zoomIn" title="Zoom in">+</button>
+    <button id="exportBtn" title="Export takes as markdown + media into a folder">export</button>
+    <button id="zipBtn" title="Download everything as one .zip">zip</button>
+    <button id="newBtn" title="Delete all takes, start fresh">new</button>
+  </div>
 </header>
 
 <main id="tl">
@@ -271,7 +294,7 @@ const LANES = [ // muted, distinguishable hues (oklch hue angles)
   { h: 300, c: '#b08fc4' }, { h: 350, c: '#c48f9f' }, { h: 180, c: '#7fc4bd' },
 ];
 const state = {
-  session: { name: '', bpm: null, key: '', created: isoNow() },
+  session: { name: '', bpm: null, key: '', notes: '', created: isoNow() },
   takes: [],            // {id,name,kind,start,duration,recordedAt,bpm,key,tags,notes,keep,mime,ext,blob,buffer,peaks,lane}
   selectedId: null,
   playhead: 0,
@@ -493,6 +516,7 @@ function select(id){
     t.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   renderPanel();
+  renderChips();
 }
 function renderPanel(){
   if (panelUrl){ URL.revokeObjectURL(panelUrl); panelUrl = null; }
@@ -500,8 +524,12 @@ function renderPanel(){
   const t = takeById(state.selectedId);
   if (!t){
     p.classList.add('empty');
-    p.innerHTML = '<div>Optional, never required: click a take to name it, set bpm / key / tags, star it, write notes — now or later. '
-      + '<b>space</b> plays · <b>R</b> records · drag takes to retime · export writes markdown + audio.</div>';
+    p.innerHTML =
+      '<div class="f" style="flex:1"><span class="slabel">session notes</span>' +
+      '<textarea id="sessionNotes" rows="2" placeholder="notes for the whole session — click a take to edit its details"></textarea></div>';
+    const ta = $('#sessionNotes');
+    ta.value = state.session.notes || '';
+    ta.addEventListener('input', e => { state.session.notes = e.target.value; saveSessionMeta(); });
     return;
   }
   p.classList.remove('empty');
@@ -780,6 +808,9 @@ function sessionMarkdown(entries){
   const s = state.session;
   const y = ['---'];
   y.push('title: ' + q(s.name || 'Session ' + (s.created || '').slice(0, 10)));
+  if (s.bpm) y.push('bpm: ' + s.bpm);
+  if (s.key) y.push('key: ' + q(s.key));
+  if ((s.notes || '').trim()) y.push('notes: ' + q(s.notes.trim()));
   y.push('created: ' + q(s.created));
   y.push('exported: ' + q(isoNow()));
   y.push('takes: ' + entries.length);
@@ -901,6 +932,36 @@ function setZoom(z){
 }
 const saveSessionMeta = debounce(() => idbSetMeta('session', state.session), 300);
 
+/* click-to-edit chips: small label expands into an input on click */
+function chipValue(chip){ return chip.id === 'bpmChip' ? (state.session.bpm ?? '') : (state.session.key || ''); }
+function renderChips(){
+  const b = $('#bpmChip'), k = $('#keyChip');
+  if (b) b.querySelector('.cv').textContent = state.session.bpm ? state.session.bpm + ' bpm' : '';
+  if (k) k.querySelector('.cv').textContent = state.session.key || '';
+}
+function wireChip(chip, commit){
+  const fld = chip.querySelector('.fld');
+  const close = () => {
+    if (!chip.classList.contains('edit')) return;
+    commit(fld.value);
+    chip.classList.remove('edit');
+    renderChips();
+  };
+  const open = () => {
+    chip.classList.add('edit');
+    fld.value = chipValue(chip);
+    fld.focus(); fld.select();
+  };
+  chip.addEventListener('click', e => {
+    if (e.target === fld) return;
+    if (!chip.classList.contains('edit')){ e.preventDefault(); open(); }
+  });
+  chip.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === 'Escape'){ e.preventDefault(); close(); }
+  });
+  fld.addEventListener('blur', close);
+  fld.addEventListener('input', () => commit(fld.value));   // live-commit while typing
+}
 function wire(){
   $('#recBtn').addEventListener('click', toggleRecord);
   $('#playBtn').addEventListener('click', togglePlay);
@@ -910,12 +971,16 @@ function wire(){
   $('#zipBtn').addEventListener('click', exportZip);
   $('#newBtn').addEventListener('click', newSession);
   $('#sessionName').addEventListener('input', e => { state.session.name = e.target.value; saveSessionMeta(); });
-  $('#sessBpm').addEventListener('input', e => { state.session.bpm = e.target.value === '' ? null : (parseFloat(e.target.value) || null); saveSessionMeta(); });
-  $('#sessKey').addEventListener('input', e => { state.session.key = e.target.value.trim(); saveSessionMeta(); });
+  wireChip($('#bpmChip'), v => { state.session.bpm = v === '' ? null : (parseFloat(v) || null); saveSessionMeta(); });
+  wireChip($('#keyChip'), v => { state.session.key = v.trim(); saveSessionMeta(); });
 
-  // scrub-seek on the ruler and empty timeline space
+  // scrub-seek on the ruler and empty timeline space; a click (no drag) deselects
+  // the take and shows session notes
+  let downX = 0, downY = 0;
   $('#content').addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.bar')) return;
+    if (e.button !== 0) return;
+    downX = e.clientX; downY = e.clientY;
+    const onBar = !!e.target.closest('.bar');
     const wasPlaying = state.playing;
     if (wasPlaying) pausePlayback();
     const tl = $('#tl');
@@ -926,9 +991,11 @@ function wire(){
     seek(e);
     const mv = ev => seek(ev);
     window.addEventListener('pointermove', mv);
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', ev => {
       window.removeEventListener('pointermove', mv);
-      if (wasPlaying) startPlayback();
+      const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > 4;
+      if (!onBar && !moved && state.selectedId){ select(null); }
+      else if (wasPlaying && !moved) startPlayback();
     }, { once: true });
   });
 
@@ -953,11 +1020,10 @@ function newSession(){
   state.takes = [];
   state.selectedId = null;
   state.playhead = 0;
-  state.session = { name: '', bpm: null, key: '', created: isoNow() };
+  state.session = { name: '', bpm: null, key: '', notes: '', created: isoNow() };
   idbSetMeta('session', state.session);
   $('#sessionName').value = '';
-  $('#sessBpm').value = '';
-  $('#sessKey').value = '';
+  renderChips();
   refresh(); renderPanel();
 }
 
@@ -973,8 +1039,7 @@ async function init(){
     state.takes.forEach(t => { t.buffer = null; t.peaks = null; t.el = null; });
   }
   $('#sessionName').value = state.session.name || '';
-  $('#sessBpm').value = state.session.bpm ?? '';
-  $('#sessKey').value = state.session.key || '';
+  renderChips();
   refresh(); renderPanel(); updateTimeReadout();
   state.takes.forEach(t => ensurePeaks(t));
   if (state.takes.length) toast(state.takes.length + ' take' + (state.takes.length > 1 ? 's' : '') + ' restored');
