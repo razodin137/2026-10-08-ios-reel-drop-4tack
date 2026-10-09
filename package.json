@@ -6,10 +6,12 @@
     "lint:fix": "node scripts/lint.js --fix"
   },
   "devDependencies": {
-    "@37signals/eslint-config": "^0.0.2",
-    "@37signals/stylelint-config-scss": "^0.0.3",
+    "@eslint/js": "^9.39.5",
+    "@stylistic/eslint-plugin-js": "^1.8.1",
     "eslint": "^9.39.5",
+    "globals": "^16.0.0",
     "html-validate": "^11.16.2",
-    "stylelint": "^15.11.0"
+    "stylelint": "^16.24.0",
+    "stylelint-config-recommended": "^16.0.0"
   }
 }

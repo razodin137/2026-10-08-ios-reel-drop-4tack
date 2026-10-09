@@ -1,5 +1,5 @@
 "use strict"
 
 module.exports = {
-  extends: "@37signals/stylelint-config-scss"
+  extends: "stylelint-config-recommended"
 }
