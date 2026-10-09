@@ -1,0 +1,236 @@
+/* ---------- record page: the one-press view, audio and video ---------- */
+/* A second full-screen page that COVERS #app rather than hiding it, so the timeline keeps
+ * its geometry underneath and needs no repair pass on the way back. The audio view is a
+ * dead-centre stack — title, record, timer under it — with the page toggle + vid tickbox
+ * in the corner. Ticking vid reshapes around a locked 1:1 camera stage: same corner pair,
+ * record dead-centre in a bottom bar, timer at its left like the timeline's readout. */
+#rec{
+  position:fixed; inset:0; z-index:var(--z-rec); display:none;
+  background:var(--rec-bg); color:var(--rec-ink);
+  /* retint the shared hard-shadow and pulse for a red ground — no new keyframes needed */
+  --shadow-ink: oklch(34% 0.16 27);
+  --accent-dim: oklch(98% 0.012 27 / .4);
+  padding:calc(var(--s5) + env(safe-area-inset-top)) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+}
+body.record-mode #rec{
+  display:grid; gap:var(--s5);
+  grid-template-columns:minmax(0, 1fr);
+  /* dead-centre stack — title, record, timer — floated between two absorbent rows,
+   * with the toggle + vid pair pinned to the bottom corner */
+  grid-template-rows:minmax(0, 1fr) auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:"." "title" "rec" "time" "." "side";
+}
+body.record-mode #camPreview{display:none !important}   /* the stage supersedes the floating preview */
+/* the toast moves up top so it can never land on the record button */
+body.record-mode #toast{top:calc(var(--s5) + env(safe-area-inset-top)); bottom:auto}
+#recExit{
+  position:absolute; top:calc(var(--s2) + env(safe-area-inset-top)); right:var(--s2);
+  width:44px; height:44px; padding:0;
+  font:700 14px var(--font-mono);
+  background:transparent; border-color:transparent; color:var(--rec-ink);
+}
+@media (hover:hover){
+  #recExit:hover{border-color:var(--rec-ink)}
+}
+#recTitle{
+  grid-area:title; justify-self:center; text-align:center; margin:0;
+  padding:0 calc(44px + var(--s3));   /* keeps a centred title clear of the corner ✕ */
+  font:400 clamp(20px, 4.5vw, 30px) / 1.05 var(--font-display); letter-spacing:.01em;
+  color:var(--rec-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:100%; min-width:0;
+}
+#recTitle:empty::before{content:'untitled session'; color:var(--rec-ink-dim)}
+body.renaming #recTitle{display:none}
+#rec #titleEdit{
+  grid-area:title; justify-self:center; width:min(340px, 100%); max-width:calc(100% - 112px);
+  background:transparent; color:var(--rec-ink); border-color:var(--rec-ink); text-align:center;
+}
+#rec #titleEdit::placeholder{color:var(--rec-ink-dim)}
+#recTime{
+  grid-area:time; justify-self:center;
+  font:700 clamp(46px, 15vw, 112px) / 1 var(--font-mono);
+  font-variant-numeric:tabular-nums; letter-spacing:.01em;
+  color:var(--rec-ink-dim);
+}
+body.recording #recTime{color:var(--rec-ink)}
+#recVid{
+  display:flex; align-items:center; gap:var(--s3); height:44px; padding:0 var(--s3);
+  border:var(--bd) solid var(--rec-ink); cursor:pointer;
+  font:700 11px var(--font-mono); text-transform:uppercase; letter-spacing:.14em; color:var(--rec-ink);
+}
+body.record-mode #recVid input{
+  appearance:none; -webkit-appearance:none; width:22px; height:22px; margin:0; flex:none;
+  border:var(--bd) solid var(--rec-ink); background:transparent; cursor:pointer;
+  display:grid; place-items:center;
+}
+body.record-mode #recVid input:checked{background:var(--rec-ink)}
+body.record-mode #recVid input:checked::after{content:''; width:10px; height:10px; background:var(--rec-bg)}
+#recBig{
+  grid-area:rec; justify-self:center; width:min(340px, 78vw); height:104px;
+  display:flex; align-items:center; justify-content:center; gap:var(--s3);
+  background:var(--rec-ink); color:var(--rec-bg); border-color:var(--rec-ink);
+  font:400 28px/1 var(--font-display); text-transform:uppercase; letter-spacing:.2em;
+}
+body.record-mode #recBig .dot{
+  width:16px; height:16px; background:currentColor; border-radius:50%; flex:none;
+  transition:border-radius var(--dur-micro) var(--ease-out);
+}
+body.recording #recBig .dot{border-radius:2px}
+body.recording #recBig{animation:recPulse 1.4s infinite}
+#recStage{display:none}
+
+/* the page toggle + vid tickbox keep the far-right corner in both layouts */
+#recSide{grid-area:side; justify-self:end}
+#recTLBtn{
+  height:44px; padding:0 var(--s3); background:transparent;
+  border:var(--bd) solid var(--rec-ink); color:var(--rec-ink);
+  font:700 11px var(--font-mono); text-transform:uppercase; letter-spacing:.14em;
+}
+
+/* video layout: title up top, the camera owns the middle, a real bottom bar — timer far
+ * left in line with the timeline's readout, record dead-centre, toggle + vid far right */
+body.record-mode.has-video #rec{
+  gap:var(--s2);
+  grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows:auto minmax(0, 1fr) auto;
+  grid-template-areas:"title title title" "stage stage stage" "time rec side";
+  /* side padding stays put so the corner pair sits in exactly the same place as the audio
+   * view; only the stage bleeds out to the screen edges */
+  padding-block:calc(var(--s2) + env(safe-area-inset-top)) calc(var(--s2) + env(safe-area-inset-bottom));
+}
+body.record-mode.has-video #recStage{
+  display:grid; grid-area:stage; place-items:center; min-height:0;
+  margin-inline:calc(-1 * var(--s4));   /* edge-to-edge camera, without moving any control */
+  container-type:size;   /* lets the square size against BOTH axes of the stage */
+}
+/* the locked frame: 1:1 whatever the device and camera give us, cropped to fill */
+body.record-mode.has-video #recCam{
+  width:min(100cqw, 100cqh); height:min(100cqw, 100cqh);
+  object-fit:cover; background:var(--shadow-ink);
+  transform:scaleX(-1);   /* the self-view reads as a mirror; the saved file is unmirrored */
+}
+body.record-mode.has-video #recTime{
+  font-size:clamp(26px, 5vw, 42px);
+  justify-self:start;   /* back at the bottom-left, its original slot */
+}
+body.record-mode.has-video #recBig{width:auto; height:60px; padding:0 var(--s4); font-size:20px}
+/* last, so it outranks the layout overrides above */
+body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
+
+/* ---------- save page: write the export set into a folder you pick ---------- */
+/* Same cover idiom as #rec — a fixed layer over #app, so the timeline keeps its geometry
+ * underneath and needs no repair on the way back. Neutral ground: this page is
+ * administrative, so it borrows the bg/panel tokens rather than the record page's red. */
+#save{
+  position:fixed; inset:0; z-index:var(--z-save); display:none;
+  background:var(--bg); color:var(--ink);
+  padding:calc(var(--s5) + env(safe-area-inset-top)) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+}
+body.save-mode #save{
+  display:grid; gap:var(--s5);
+  grid-template-columns:minmax(0, 1fr);
+  /* the head and the actions float between two absorbent rows, like the record stack */
+  grid-template-rows:minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-areas:"." "head" "acts" ".";
+  justify-items:center;
+}
+body.save-mode #camPreview{display:none !important}   /* nothing floats over a covering page */
+/* the toast moves up top, clear of the centred action stack */
+body.save-mode #toast{top:calc(var(--s5) + env(safe-area-inset-top)); bottom:auto}
+#saveExit{
+  position:absolute; top:calc(var(--s2) + env(safe-area-inset-top)); right:var(--s2);
+  width:44px; height:44px; padding:0;
+  font:700 14px var(--font-mono);
+  background:transparent; border-color:transparent; color:var(--ink-dim);
+}
+@media (hover:hover){
+  #saveExit:hover{border-color:var(--ink)}
+}
+#saveHead{
+  grid-area:head; width:min(440px, 100%);
+  display:flex; flex-direction:column; gap:var(--s2); text-align:center;
+  padding:0 calc(44px + var(--s3));   /* keeps the centred text clear of the corner ✕ */
+}
+#saveTitle{
+  margin:0; font:400 clamp(18px, 4vw, 26px) / 1.05 var(--font-display);
+  text-transform:uppercase; letter-spacing:.08em;
+}
+#saveFolder{
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.14em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#saveMsg{margin:0; font:13px/1.5 var(--font-ui); color:var(--ink-dim)}
+#saveActs{
+  grid-area:acts; width:min(340px, 100%);
+  display:flex; flex-direction:column; gap:var(--s3); align-items:stretch;
+}
+#saveActs .f-keep{align-self:center}
+#saveGo{height:64px; font:400 20px/1 var(--font-display); text-transform:uppercase; letter-spacing:.16em}
+#savePick{background:transparent}
+#saveProgress{
+  min-height:18px; font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.12em; text-align:center;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* ---------- import page: read our own markdown + YAML back into a session ---------- */
+/* Same cover idiom as #rec and #save — a fixed layer over #app, so the timeline keeps its
+ * geometry underneath and needs no repair on the way back. Administrative ground, like #save:
+ * it borrows the bg/panel tokens rather than the record page's red. */
+#import{
+  position:fixed; inset:0; z-index:var(--z-import); display:none;
+  background:var(--bg); color:var(--ink);
+  padding:calc(var(--s5) + env(safe-area-inset-top)) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+}
+body.import-mode #import{
+  display:grid; gap:var(--s5);
+  grid-template-columns:minmax(0, 1fr);
+  /* the head and the actions float between two absorbent rows, like the record stack */
+  grid-template-rows:minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-areas:"." "head" "acts" ".";
+  justify-items:center;
+}
+body.import-mode #camPreview{display:none !important}   /* nothing floats over a covering page */
+/* the toast moves up top, clear of the centred action stack */
+body.import-mode #toast{top:calc(var(--s5) + env(safe-area-inset-top)); bottom:auto}
+/* the whole page is the drop target, so give the drop a visible home rather than a hidden one */
+body.import-drop #import{background:color-mix(in oklab, var(--bg) 90%, var(--ink))}
+#importExit{
+  position:absolute; top:calc(var(--s2) + env(safe-area-inset-top)); right:var(--s2);
+  width:44px; height:44px; padding:0;
+  font:700 14px var(--font-mono);
+  background:transparent; border-color:transparent; color:var(--ink-dim);
+}
+@media (hover:hover){
+  #importExit:hover{border-color:var(--ink)}
+}
+#importHead{
+  grid-area:head; width:min(440px, 100%);
+  display:flex; flex-direction:column; gap:var(--s2); text-align:center;
+  padding:0 calc(44px + var(--s3));   /* keeps the centred text clear of the corner ✕ */
+}
+#importTitle{
+  margin:0; font:400 clamp(18px, 4vw, 26px) / 1.05 var(--font-display);
+  text-transform:uppercase; letter-spacing:.08em;
+}
+#importHint{
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.14em;
+}
+#importMsg{margin:0; font:13px/1.5 var(--font-ui); color:var(--ink-dim)}
+#importActs{
+  grid-area:acts; width:min(340px, 100%);
+  display:flex; flex-direction:column; gap:var(--s3); align-items:stretch;
+}
+#importPickFolder,#importPickFiles{background:transparent}
+#importProgress{
+  min-height:18px; font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.12em; text-align:center;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+@media (max-width:560px){
+  #import{padding-inline:var(--s3)}
+  body.import-mode #import{gap:var(--s3)}
+}
+

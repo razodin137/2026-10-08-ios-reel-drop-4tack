@@ -1,0 +1,120 @@
+/* ---------- overlays: menu + detail views ---------- */
+.ovl{position:fixed; inset:0; z-index:var(--z-ovl); display:none}
+.ovl.open{display:block}
+.scrim{position:absolute; inset:0; background:oklch(8% 0.008 260 / .62); opacity:0}
+.ovl.open .scrim{animation:scrimIn var(--dur-short) var(--ease-out) forwards}
+.ovl.closing .scrim{animation:scrimOut 140ms var(--ease-in) forwards}
+.panel{
+  position:absolute; top:0; right:0; bottom:0; width:min(360px, 100%);
+  background:var(--panel); border-left:var(--bd) solid var(--line);
+  display:flex; flex-direction:column; overflow-y:auto; overscroll-behavior:contain;
+}
+.ovl.open .panel{animation:panelIn var(--dur-long) var(--ease-out)}
+.ovl.closing .panel{animation:panelOut 160ms var(--ease-in)}
+@keyframes panelIn{from{transform:translateX(24px); opacity:0}}
+@keyframes panelOut{to{transform:translateX(24px); opacity:0}}
+@keyframes scrimIn{to{opacity:1}}
+@keyframes scrimOut{to{opacity:0}}
+
+/* ---------- menu ---------- */
+.m-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3);
+  padding:var(--s4); border-bottom:var(--bd) solid var(--line);
+}
+.wordmark{font:400 19px/1 var(--font-display); text-transform:uppercase; letter-spacing:.02em}
+.m-sub{font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.14em}
+.m-body{padding:var(--s4); display:flex; flex-direction:column; gap:var(--s5)}
+.m-actions{display:flex; flex-direction:column; gap:var(--s3)}
+.bbtn{
+  display:block; width:100%; text-align:left;
+  font:400 15px/1 var(--font-display); text-transform:uppercase; letter-spacing:.08em;
+  padding:var(--s3) var(--s4); background:var(--panel-2);
+}
+.bbtn-primary{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+.bbtn-danger{color:var(--danger); border-color:var(--danger); background:transparent}
+@media (hover:hover){
+  .bbtn-danger:hover{background:var(--danger); color:var(--accent-ink)}
+}
+.m-export{display:flex; flex-direction:column; gap:var(--s1)}
+.m-keep{margin-left:calc(var(--s4) + var(--bd))}
+.m-sec{display:flex; flex-direction:column; gap:var(--s2)}
+.m-lab{margin:0; font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.16em}
+.m-labrow{display:flex; align-items:center; justify-content:space-between}
+.m-clear{
+  display:flex; align-items:center; min-height:44px;
+  font:700 10px var(--font-mono); text-transform:uppercase; letter-spacing:.1em;
+  color:var(--ink-dim); background:transparent; border:none; padding:0 0 0 var(--s3); cursor:pointer;
+}
+@media (hover:hover){
+  .m-clear:hover{color:var(--ink); border-color:transparent}
+}
+.stepper{display:grid; grid-template-columns:56px minmax(0,1fr) 56px}
+.stepper button{height:56px; font:700 20px var(--font-mono); background:var(--panel-2)}
+.stepper output{
+  display:flex; align-items:center; justify-content:center;
+  font:400 30px/1 var(--font-display); font-variant-numeric:tabular-nums;
+  background:var(--bg); border:var(--bd) solid var(--line); border-left:none; border-right:none;
+  padding:0 var(--s2);
+}
+.m-mode{margin:var(--s1) 0 0; font:700 9.5px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.18em}
+.keygrid{display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:var(--s1)}
+.keygrid button{
+  height:44px; padding:0; font:700 11px var(--font-mono); letter-spacing:0; text-transform:none;
+}
+.keygrid button.on{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+.m-tags{width:100%}
+.m-notes{width:100%; min-height:104px; resize:vertical; font:13px/1.5 var(--font-ui)}
+.m-foot{
+  margin-top:auto; padding:var(--s3) var(--s4); border-top:var(--bd) solid var(--line);
+  font:11px/1.8 var(--font-mono); color:var(--ink-dim);
+}
+.m-foot b{color:var(--ink); font-weight:700}
+
+/* ---------- detail views: takes & cues ---------- */
+.v-head{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  padding:var(--s2) var(--s2) var(--s2) var(--s4); border-bottom:var(--bd) solid var(--line);
+}
+.v-kicker{font:700 10px var(--font-mono); color:var(--accent); text-transform:uppercase; letter-spacing:.18em}
+.v-close{width:44px; height:44px; font:700 14px var(--font-mono); background:transparent; border-color:transparent}
+@media (hover:hover){
+  .v-close:hover{border-color:var(--line)}
+}
+.v-body{padding:var(--s4); display:flex; flex-direction:column; gap:var(--s4)}
+.v-body label{display:flex; flex-direction:column; gap:var(--s1); min-width:0}
+.v-body textarea{resize:vertical}
+.v-name{
+  font:400 20px/1.15 var(--font-display); letter-spacing:.01em;
+  padding:var(--s2) var(--s3);
+}
+.v-meta{
+  font:11px/1.8 var(--font-mono); color:var(--ink-dim);
+  border-top:var(--bd) solid var(--line-soft); padding-top:var(--s2);
+}
+.v-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s3)}
+.v-span{grid-column:1 / -1}
+.f-lab{font:700 10px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.16em}
+/* the keep tickbox — shared by the take detail panel and the export menu */
+.f-keep{
+  display:flex; flex-direction:row; align-items:center; gap:var(--s2); cursor:pointer; width:max-content;
+  font:700 11px var(--font-mono); color:var(--ink-dim); text-transform:uppercase; letter-spacing:.14em;
+}
+@media (hover:hover){
+  .f-keep:hover{color:var(--ink)}
+}
+.f-keep input{
+  appearance:none; -webkit-appearance:none; width:22px; height:22px; margin:0; flex:none;
+  border:var(--bd) solid var(--line); background:var(--bg); cursor:pointer;
+  display:grid; place-items:center;
+}
+.f-keep input:checked{background:var(--accent-btn); border-color:var(--shadow-ink)}
+.f-keep input:checked::after{content:''; width:10px; height:10px; background:var(--accent-ink)}
+.v-body input:not([type="checkbox"]), .v-body textarea{width:100%; min-width:0}
+.v-vid{width:100%; max-height:220px; background:var(--shadow-ink); border:var(--bd) solid var(--line)}
+.v-actions{display:flex; gap:var(--s3)}
+.v-dl{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+.v-del{align-self:flex-start; color:var(--danger); border-color:var(--danger); background:transparent}
+@media (hover:hover){
+  .v-del:hover{background:var(--danger); color:var(--accent-ink)}
+}
+

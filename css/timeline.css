@@ -1,0 +1,217 @@
+/* ---------- timeline ---------- */
+#app{display:grid; height:100dvh; grid-template-rows:auto minmax(0,1fr) auto}
+/* the middle row splits: a frozen lane gutter, then the scroller. The gutter is a
+ * SIBLING of #tl rather than a sticky child, so it is frozen by construction and #tl
+ * stays the only scroll container — every time↔px conversion still measures against it */
+#tlWrap{
+  display:grid; grid-template-columns:var(--gutter) minmax(0,1fr);
+  overflow:hidden; min-height:0;
+  /* a 400ms hold would otherwise raise the iOS callout / an Android context menu on the way */
+  -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+}
+#tl{overflow:auto; position:relative; background:var(--bg); min-height:0}
+#gutter{
+  display:grid; grid-template-rows:var(--rulerh) minmax(0,1fr);
+  background:var(--panel); border-right:var(--bd) solid var(--line);
+  overflow:hidden;
+}
+#gutterCorner{
+  display:flex; flex-direction:column; justify-content:center; gap:1px;
+  padding:0 var(--s2); border-bottom:var(--bd) solid var(--line);
+  overflow:hidden; min-width:0;
+}
+/* lanes slide with #tl's vertical scroll (JS translateY) so the rows stay in lockstep */
+#gutterLanes{overflow:hidden; position:relative}
+#gutterLanesInner{position:absolute; top:0; left:0; right:0; margin:0; padding:0; list-style:none}
+.g-cell{
+  display:flex; align-items:center; gap:var(--s2); padding:7px var(--s2) 7px var(--s1);
+  height:68px;   /* ROWH: mirrors barEl's lane pitch exactly */
+}
+.g-sw{
+  width:var(--s1); height:54px; flex:none;   /* BARH, offset 7px by the cell padding */
+  background:var(--lane); border:var(--bd) solid color-mix(in oklab, var(--lane) 55%, var(--line-soft));
+}
+.g-lab{
+  font:700 10px var(--font-mono); color:var(--ink-dim); letter-spacing:.08em; min-width:0;
+  overflow:hidden; text-overflow:ellipsis;
+}
+#gutterCorner .m-chip{font-size:10px; letter-spacing:.08em}
+#gutterCorner .m-chip b{font-size:10px}
+#gutterBpm,#gutterKey{display:none}   /* desktop keeps them in the masthead; coarse reveals them */
+#rulerWrap{
+  position:sticky; top:0; left:0; z-index:var(--z-ruler);
+  height:var(--rulerh); background:var(--panel);
+  border-bottom:var(--bd) solid var(--line); cursor:crosshair;
+  /* pan-y, not none: a 34–48px strip is easy to graze vertically, so vertical panning stays
+   * alive and only the horizontal drag — the scrub — is ours */
+  touch-action:pan-y;
+}
+/* the ruler, the bars and the cues are SVG: one px coordinate system, no dpr arithmetic,
+ * and — the point of the exercise — a hit area that is independent of what's drawn */
+#rulerSvg{display:block}
+#rulerSvg .tk{stroke:var(--line); stroke-width:1}
+#rulerSvg .bt{stroke:var(--accent); stroke-width:1; opacity:.55}
+#rulerSvg .lb{font:10px var(--font-mono); fill:var(--ink-dim)}
+#cueSvg{position:absolute; top:0; left:0; display:block; z-index:var(--z-cues); pointer-events:none}
+.cue{cursor:grab; touch-action:none}
+.cue .hit{fill:transparent; pointer-events:all}
+.cue :not(.hit){pointer-events:none}
+.cue .stem{stroke:var(--ink-dim); stroke-width:var(--bd); fill:none}
+.cue .dia{fill:var(--panel); stroke:var(--ink-dim); stroke-width:var(--bd)}
+@media (hover:hover){
+  .cue:hover .stem{stroke:var(--ink)}
+  .cue:hover .dia{stroke:var(--ink)}
+}
+.cue.selected .stem{stroke:var(--accent)}
+.cue.selected .dia{fill:var(--accent); stroke:var(--accent)}
+#laneSvg{position:absolute; top:0; left:0; display:block; pointer-events:none}
+.bar{cursor:grab; touch-action:manipulation}
+.bar .hit{fill:transparent; pointer-events:all}
+.bar :not(.hit){pointer-events:none}   /* the padded hit rect is the only target */
+.bar .body{
+  fill:color-mix(in oklab, var(--lane) 16%, var(--bg));
+  stroke:color-mix(in oklab, var(--lane) 55%, var(--line-soft)); stroke-width:var(--bd);
+}
+@media (hover:hover){
+  .bar:hover .body{fill:color-mix(in oklab, var(--lane) 28%, var(--bg))}
+}
+/* outline/box-shadow can't apply to SVG, so the selected chrome is two real shapes */
+.bar .sh{display:none; fill:var(--shadow-ink)}
+.bar.selected .sh{display:block}
+.bar.selected .body{stroke:var(--ink)}
+.bar .wave{fill:var(--lane); opacity:.9}
+.bar .wave.flat{fill:var(--ink-dim); opacity:.3}
+.bar text{
+  paint-order:stroke; stroke:var(--shadow-ink); stroke-width:2px; stroke-linejoin:round;
+  white-space:pre;
+}
+.bar .tname{font:400 11px var(--font-display); letter-spacing:.03em; fill:oklch(97% 0.01 var(--lane-h, 260))}
+.bar .tmeta{font:10.5px var(--font-mono); fill:oklch(86% 0.01 var(--lane-h, 260) / .9)}
+.bar .tdur{font:700 10.5px var(--font-mono); font-variant-numeric:tabular-nums; fill:oklch(86% 0.01 var(--lane-h, 260) / .9)}
+/* too narrow for words: the clip already stops collisions, this stops the clutter */
+.bar.tiny .tdur, .bar.tiny .tmeta{display:none}
+/* ctrl/cmd held: bars offer a file lift, not a retime */
+body.lift-armed .bar{cursor:copy}
+/* long-pressed: the take is picked up for retime — same shadow-and-stroke language as
+ * .selected, so a lifted take and a selected one read as the same kind of "this one" */
+.bar.picked .sh{display:block; opacity:.55}
+.bar.picked .body{
+  fill:color-mix(in oklab, var(--lane) 34%, var(--bg));
+  stroke:var(--ink); stroke-width:calc(var(--bd) * 2);
+}
+.lift-ghost{
+  position:fixed; left:-9999px; top:0; z-index:9999; pointer-events:none;   /* off-screen: setDragImage snapshots it; it must never show itself */
+  max-width:280px; padding:6px 10px;
+  background:var(--panel-2); border:var(--bd) solid var(--ink);
+  box-shadow:4px 4px 0 0 var(--shadow-ink);
+  font:700 11px var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lift-ghost::before{content:"⤓ "; color:var(--accent)}
+#playhead{
+  position:absolute; top:0; bottom:0; width:var(--bd);
+  background:var(--accent); z-index:var(--z-playhead); pointer-events:none;
+}
+#playhead::before{
+  content:''; position:absolute; top:0; left:-5px;
+  width:12px; height:7px; background:var(--accent);
+  clip-path:polygon(0 0, 100% 0, 50% 100%);
+}
+#empty{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font:700 12px var(--font-mono); text-transform:uppercase; letter-spacing:.14em;
+  color:var(--ink-dim); text-align:center; padding:var(--s4); pointer-events:none;
+}
+
+/* ---------- bottom bar: transport + record ---------- */
+/* the record button owns the exact centre of the bar; transport left, rec page + vid right */
+#bottomBar{
+  display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center;
+  gap:var(--s2);
+  padding:var(--s2) var(--s4) calc(var(--s2) + env(safe-area-inset-bottom));
+  background:var(--panel); border-top:var(--bd) solid var(--line);
+}
+.tgroup{display:flex; align-items:center; gap:var(--s2); min-width:0}
+#playBtn{
+  width:44px; height:44px; padding:0; position:relative; flex:none; background:var(--panel-2);
+}
+#playBtn .tri{
+  position:absolute; left:17px; top:13px;
+  border-style:solid; border-width:9px 0 9px 14px;
+  border-color:transparent transparent transparent var(--ink);
+}
+#playBtn .bars{display:none}
+body.playing #playBtn .tri{display:none}
+body.playing #playBtn .bars{display:block}
+body.playing #playBtn .bars::before, body.playing #playBtn .bars::after{
+  content:''; position:absolute; top:13px; bottom:13px; width:5px;
+  background:var(--ink);
+}
+body.playing #playBtn .bars::before{left:14px}
+body.playing #playBtn .bars::after{right:14px}
+#time{
+  font:700 13px var(--font-mono); font-variant-numeric:tabular-nums; letter-spacing:.02em;
+  color:var(--ink); min-width:88px; flex:none;
+}
+body.recording #time{color:var(--accent)}
+#meter{
+  width:84px; height:14px; flex:none;
+  background:var(--bg); border:var(--bd) solid var(--line);
+  display:none; overflow:hidden;
+}
+body.recording #meter{display:block}
+#meterFill{
+  height:100%; width:100%; background:var(--accent);
+  transform:scaleX(var(--lvl, 0)); transform-origin:left;
+}
+.rgroup{display:flex; align-items:center; gap:var(--s2); flex:none; justify-self:end}
+#recModeBtn{
+  height:44px; padding:0 var(--s3); flex:none;
+  font:700 10px var(--font-mono); letter-spacing:.14em; color:var(--ink-dim);
+}
+#recModeBtn[aria-pressed="true"]{background:var(--accent-btn); color:var(--accent-ink); border-color:var(--shadow-ink)}
+#vidChip{
+  display:flex; align-items:center; gap:var(--s2); height:44px; padding:0 var(--s3);
+  border:var(--bd) solid var(--line); background:var(--panel-2); cursor:pointer;
+  font:700 10px var(--font-mono); text-transform:uppercase; letter-spacing:.14em; color:var(--ink-dim);
+}
+#vidChip input{
+  appearance:none; -webkit-appearance:none; width:18px; height:18px; margin:0; flex:none;
+  border:var(--bd) solid var(--line); background:var(--bg); cursor:pointer;
+  display:grid; place-items:center;
+}
+#vidChip input:checked{background:var(--accent-btn); border-color:var(--shadow-ink)}
+#vidChip input:checked::after{content:''; width:8px; height:8px; background:var(--accent-ink)}
+/* the device mode can't change mid-take — flipping it would stop the live tracks */
+#vidChip:has(input:disabled){opacity:.45; cursor:not-allowed}
+#recBtn{
+  height:56px; min-width:148px; padding:0 var(--s4);
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  background:var(--accent); color:var(--accent-ink); border-color:var(--shadow-ink);
+  font:400 19px/1 var(--font-display); text-transform:uppercase; letter-spacing:.2em;
+}
+#recBtn .dot{
+  width:12px; height:12px; background:currentColor; border-radius:50%; flex:none;
+  transition:border-radius var(--dur-micro) var(--ease-out);
+}
+body.recording #recBtn .dot{border-radius:2px}
+body.recording #recBtn{animation:recPulse 1.4s infinite}
+@keyframes recPulse{50%{box-shadow:4px 4px 0 0 var(--shadow-ink), 0 0 0 8px var(--accent-dim)}}
+
+/* ---------- misc ---------- */
+#camPreview{
+  position:fixed; right:var(--s4); bottom:104px; width:200px;
+  border:var(--bd) solid var(--line); background:var(--shadow-ink); z-index:var(--z-cam);
+}
+.hidden{display:none !important}
+#toast{
+  position:fixed; left:50%; bottom:96px; transform:translateX(-50%);
+  background:var(--panel-2); border:var(--bd) solid var(--ink);
+  color:var(--ink); padding:var(--s3) var(--s4); font:12.5px/1.4 var(--font-ui);
+  box-shadow:4px 4px 0 0 var(--shadow-ink);
+  z-index:var(--z-toast); max-width:min(420px, calc(100vw - 32px));
+  opacity:0; pointer-events:none;
+  transition:opacity var(--dur-short) var(--ease-out);
+}
+#toast.show{opacity:1}
+.tl-video{position:fixed; left:-9999px; top:0; width:2px; height:2px}
+

@@ -1,0 +1,140 @@
+/* Hallmark · component: app shell (studio tool) · genre: brutalist/utilitarian · theme: graphite + signal red
+ * pre-emit critique: P5 H4 E4 S4 R4 V4 · redesign: de-slop · display: Archivo Black
+ * states: default · hover · focus-visible · active · disabled · loading · error · success · recording · playing · empty
+ * contrast: pass (40-41) · tokens: pass (48) · responsive: pass (34,49-52) · icons: none (typography only) */
+:root{
+  --bg: oklch(15% 0.008 260);
+  --panel: oklch(19% 0.01 260);
+  --panel-2: oklch(23% 0.013 260);
+  --line: oklch(40% 0.015 260);
+  --line-soft: oklch(30% 0.012 260);
+  --ink: oklch(93% 0.004 260);
+  --ink-dim: oklch(67% 0.01 260);
+  --accent: oklch(64% 0.21 27);
+  --accent-btn: oklch(57% 0.2 27);
+  --accent-ink: oklch(97% 0.01 27);
+  --accent-dim: oklch(64% 0.21 27 / .35);
+  --danger: oklch(60% 0.2 27);
+  --shadow-ink: oklch(7% 0.008 260);
+  /* record page: signal red ground, white ink — the one-press view */
+  --rec-bg: oklch(52% 0.21 27);
+  --rec-ink: oklch(98% 0.012 27);
+  --rec-ink-dim: oklch(88% 0.035 27);
+  --font-display: "Archivo Black", system-ui, sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --bd: 2px;
+  /* the ruler and the frozen lane gutter mirror each other's metrics; JS republishes
+   * --rulerh (34 fine / 48 coarse) so the ruler can grow into a real touch target */
+  --rulerh: 34px; --gutter: 56px;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.7, 0, .84, 0);
+  --dur-micro: 120ms; --dur-short: 200ms; --dur-long: 320ms;
+  /* the cover pages (rec, save) clear the playhead (8) but stay under the webcam preview and toasts */
+  --z-playhead: 8; --z-rec: 12; --z-save: 13; --z-import: 14; --z-ruler: 6; --z-cues: 7; --z-cam: 20; --z-ovl: 40; --z-toast: 60;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+html{overflow:clip}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:13px/1.5 var(--font-ui);
+  overflow:clip;
+  -webkit-user-select:none; user-select:none;
+}
+button{
+  font:700 12px var(--font-ui);
+  text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;
+  color:var(--ink); background:var(--panel-2);
+  border:var(--bd) solid var(--line);
+  padding:9px 14px; cursor:pointer;
+  transition:transform var(--dur-micro) var(--ease-out),
+             box-shadow var(--dur-micro) var(--ease-out),
+             background-color var(--dur-micro) var(--ease-out),
+             border-color var(--dur-micro) var(--ease-out);
+}
+@media (hover:hover){
+  button:hover{border-color:var(--ink)}
+}
+button:active{transform:translate(1px,1px)}
+button:disabled{opacity:.45; cursor:not-allowed}
+input[type=text], input[type=number], textarea{
+  font:13px/1.5 var(--font-ui); color:var(--ink); background:var(--bg);
+  border:var(--bd) solid var(--line); padding:var(--s2) var(--s3); border-radius:0;
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+[tabindex]:focus-visible{
+  outline:var(--bd) solid var(--ink); outline-offset:2px;
+}
+@media (hover:hover){
+  input[type=text]:hover, input[type=number]:hover, textarea:hover{border-color:var(--ink-dim)}
+}
+input::placeholder, textarea::placeholder{color:var(--ink-dim)}
+/* hard-shadow press — the brutalist signature; the button physically presses into its shadow */
+.hs{box-shadow:4px 4px 0 0 var(--shadow-ink)}
+@media (hover:hover){
+  .hs:hover{box-shadow:5px 5px 0 0 var(--shadow-ink); transform:translate(-1px,-1px)}
+}
+.hs:active{box-shadow:0 0 0 0 var(--shadow-ink); transform:translate(4px,4px)}
+.hs:disabled{box-shadow:2px 2px 0 0 var(--shadow-ink); transform:none}
+
+/* ---------- masthead: bpm · title (centered) · key, zoom + burger right ---------- */
+#top{
+  display:grid; grid-template-columns:minmax(0,1fr) auto auto auto; align-items:center;
+  gap:var(--s3); min-height:68px; padding:var(--s2) var(--s4);
+  background:var(--panel); border-bottom:var(--bd) solid var(--line);
+}
+#masthead{
+  display:grid;
+  grid-template-areas:"bpm title key";
+  grid-template-columns:minmax(0,1fr) minmax(0,auto) minmax(0,1fr);
+  align-items:baseline; gap:var(--s1) var(--s3); min-width:0; cursor:pointer;
+}
+#mastBpm{grid-area:bpm; justify-self:start; cursor:pointer}
+#mastKey{grid-area:key; justify-self:end; cursor:pointer}
+#mastTitle{
+  grid-area:title; justify-self:center;
+  margin:0; font:400 clamp(20px, 4.5vw, 30px) / 1.05 var(--font-display);
+  letter-spacing:.01em; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:100%; min-width:0;
+}
+#mastTitle:empty::before{content:'untitled session'; color:var(--ink-dim); font-weight:400}
+body.renaming #mastTitle{display:none}
+#titleEdit{
+  font:400 clamp(20px, 4.5vw, 30px) / 1.05 var(--font-display);
+  padding:2px var(--s2); width:min(360px, 100%);
+}
+/* grid placement is per-mount: the masthead and the record page each own their slot */
+#masthead>#titleEdit{grid-area:title; justify-self:center}
+.m-chip{
+  display:block;   /* block grid item: can shrink and clip, unlike an overflowing inline */
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  letter-spacing:.12em; white-space:nowrap;
+  /* a long title can squeeze the side tracks to nothing — chips clip, they don't collide */
+  min-width:0; overflow:hidden; text-overflow:ellipsis;
+}
+.m-chip b{color:var(--ink); font-weight:700}
+#burger{
+  width:48px; height:48px; padding:0; flex:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  background:var(--panel-2);
+}
+#burger span{
+  display:block; width:22px; height:3px; background:var(--ink);
+  transition:transform var(--dur-short) var(--ease-out), opacity var(--dur-short) var(--ease-out);
+}
+body.menu-open #burger span:nth-child(1){transform:translateY(8px) rotate(45deg)}
+body.menu-open #burger span:nth-child(2){opacity:0}
+body.menu-open #burger span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+/* zoom moved up next to the burger, but ghost-small, so the masthead keeps its air */
+#zoomOut, #zoomIn{
+  width:36px; height:36px; padding:0;
+  background:transparent; border-color:transparent; color:var(--ink-dim);
+  font:700 15px var(--font-mono);
+}
+@media (hover:hover){
+  #zoomOut:hover, #zoomIn:hover{border-color:var(--ink); color:var(--ink)}
+}
+

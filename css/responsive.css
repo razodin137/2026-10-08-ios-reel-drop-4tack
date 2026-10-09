@@ -1,0 +1,43 @@
+/* ---------- responsive ---------- */
+@media (max-width: 560px){
+  #top{min-height:60px; padding:var(--s2) var(--s3)}
+  .m-chip{display:none}   /* phone header: title + zoom + burger is all that fits */
+  /* the bar stacks: transport, full-width record, then the rec page + vid pair */
+  #bottomBar{
+    grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto auto;
+    /* the 4px hard shadow on the full-width record button would otherwise be clipped
+     * by html,body{overflow:clip} — so the bar carries the extra room instead */
+    padding:var(--s2) calc(var(--s3) + 4px) calc(var(--s2) + 4px + env(safe-area-inset-bottom));
+  }
+  #bottomBar .rgroup{justify-self:center}
+  #time{min-width:74px}
+  #meter{width:56px}
+  #toast{bottom:184px}
+  #camPreview{bottom:194px}
+  #recBig{width:min(300px, 84vw); height:88px; font-size:24px}
+  #save{padding-inline:var(--s3)}
+  body.save-mode #save{gap:var(--s3)}
+  #saveGo{height:56px; font-size:18px}
+  /* phone video bar: timer + pair share a row, the record button goes full-width under */
+  body.record-mode.has-video #rec{
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto minmax(0,1fr) auto auto;
+    grid-template-areas:"title title" "stage stage" "time side" "rec rec";
+  }
+}
+/* ---------- coarse pointers: touch-sized chrome ---------- */
+/* any-pointer, not pointer: the latter reflects only the PRIMARY pointer, so it stays
+ * false on a touchscreen laptop even while a finger is on the glass */
+@media (any-pointer: coarse){
+  :root{--gutter:44px}
+  #zoomOut, #zoomIn{width:44px; height:44px}
+  /* the corner recovers the session bpm/key that .m-chip{display:none} removes under 560px */
+  #gutterBpm, #gutterKey{display:block}
+  #gutterCorner{cursor:pointer}
+  .g-cell{padding-left:var(--s1)}
+  .g-sw{width:3px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
+  body.recording #recBtn, body.recording #recBig{animation:none}
+}
