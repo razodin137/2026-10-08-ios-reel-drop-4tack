@@ -11,12 +11,15 @@ A single HTML file for capturing musical ideas the moment they happen. No projec
 ## Features
 
 - **One-press recording** — audio or audio+video, straight from the mic/camera
+- **Record page** — a second view with the timeline out of the way. Just the session title, a timer, the video tickbox and one big record button, all in red and white. Tick video and the page reshapes: the camera takes a locked 1:1 stage with the controls pushed to the top and bottom, and the camera opens as soon as the view is up so you can frame before recording
 - **Rough timeline** — takes stack into lanes, drag horizontally to retime
-- **Optional, deferred metadata** — name / bpm / key / tags / notes / keep per take, plus session-level bpm + key
+- **Optional, deferred metadata** — name / bpm / key / tags / notes / keep per take, plus session-level bpm + key + tags
 - **Playback** — takes play back together from the playhead; scrub on the ruler
 - **Waveforms** — decoded and drawn per take
 - **Persistence** — everything (including media) is stored locally in IndexedDB; reload-safe
 - **Export** — markdown with YAML front matter per take, session index, and media files
+- **Take download** — "download" in a take's detail panel asks *Download with notes?* and zips that take's markdown + media under the same name the full export would use
+- **Render** — bounce the whole session to a single mixdown WAV
 
 ## Export naming
 
