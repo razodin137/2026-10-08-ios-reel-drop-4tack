@@ -37,11 +37,14 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
   --bd: 2px;
+  /* the ruler and the frozen lane gutter mirror each other's metrics; JS republishes
+   * --rulerh (34 fine / 48 coarse) so the ruler can grow into a real touch target */
+  --rulerh: 34px; --gutter: 56px;
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --ease-in: cubic-bezier(.7, 0, .84, 0);
   --dur-micro: 120ms; --dur-short: 200ms; --dur-long: 320ms;
-  /* rec page clears the playhead (8) but stays under the webcam preview and toasts */
-  --z-playhead: 8; --z-rec: 12; --z-ruler: 6; --z-cues: 7; --z-cam: 20; --z-ovl: 40; --z-toast: 60;
+  /* the cover pages (rec, save) clear the playhead (8) but stay under the webcam preview and toasts */
+  --z-playhead: 8; --z-rec: 12; --z-save: 13; --z-import: 14; --z-ruler: 6; --z-cues: 7; --z-cam: 20; --z-ovl: 40; --z-toast: 60;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -269,70 +272,105 @@ body.menu-open #burger span:nth-child(3){transform:translateY(-8px) rotate(-45de
 
 /* ---------- timeline ---------- */
 #app{display:grid; height:100dvh; grid-template-rows:auto minmax(0,1fr) auto}
+/* the middle row splits: a frozen lane gutter, then the scroller. The gutter is a
+ * SIBLING of #tl rather than a sticky child, so it is frozen by construction and #tl
+ * stays the only scroll container — every time↔px conversion still measures against it */
+#tlWrap{
+  display:grid; grid-template-columns:var(--gutter) minmax(0,1fr);
+  overflow:hidden; min-height:0;
+  /* a 400ms hold would otherwise raise the iOS callout / an Android context menu on the way */
+  -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+}
 #tl{overflow:auto; position:relative; background:var(--bg); min-height:0}
+#gutter{
+  display:grid; grid-template-rows:var(--rulerh) minmax(0,1fr);
+  background:var(--panel); border-right:var(--bd) solid var(--line);
+  overflow:hidden;
+}
+#gutterCorner{
+  display:flex; flex-direction:column; justify-content:center; gap:1px;
+  padding:0 var(--s2); border-bottom:var(--bd) solid var(--line);
+  overflow:hidden; min-width:0;
+}
+/* lanes slide with #tl's vertical scroll (JS translateY) so the rows stay in lockstep */
+#gutterLanes{overflow:hidden; position:relative}
+#gutterLanesInner{position:absolute; top:0; left:0; right:0; margin:0; padding:0; list-style:none}
+.g-cell{
+  display:flex; align-items:center; gap:var(--s2); padding:7px var(--s2) 7px var(--s1);
+  height:68px;   /* ROWH: mirrors barEl's lane pitch exactly */
+}
+.g-sw{
+  width:var(--s1); height:54px; flex:none;   /* BARH, offset 7px by the cell padding */
+  background:var(--lane); border:var(--bd) solid color-mix(in oklab, var(--lane) 55%, var(--line-soft));
+}
+.g-lab{
+  font:700 10px var(--font-mono); color:var(--ink-dim); letter-spacing:.08em; min-width:0;
+  overflow:hidden; text-overflow:ellipsis;
+}
+#gutterCorner .m-chip{font-size:10px; letter-spacing:.08em}
+#gutterCorner .m-chip b{font-size:10px}
+#gutterBpm,#gutterKey{display:none}   /* desktop keeps them in the masthead; coarse reveals them */
 #rulerWrap{
   position:sticky; top:0; left:0; z-index:var(--z-ruler);
-  height:34px; background:var(--panel);
+  height:var(--rulerh); background:var(--panel);
   border-bottom:var(--bd) solid var(--line); cursor:crosshair;
+  /* pan-y, not none: a 34–48px strip is easy to graze vertically, so vertical panning stays
+   * alive and only the horizontal drag — the scrub — is ours */
+  touch-action:pan-y;
 }
-#ruler{display:block}
-#cues{position:absolute; top:0; left:0; right:0; height:34px; z-index:var(--z-cues); pointer-events:none}
-.cue{
-  position:absolute; top:0; width:16px; height:100%; margin-left:-8px;
-  pointer-events:auto; cursor:grab; touch-action:none;
+/* the ruler, the bars and the cues are SVG: one px coordinate system, no dpr arithmetic,
+ * and — the point of the exercise — a hit area that is independent of what's drawn */
+#rulerSvg{display:block}
+#rulerSvg .tk{stroke:var(--line); stroke-width:1}
+#rulerSvg .bt{stroke:var(--accent); stroke-width:1; opacity:.55}
+#rulerSvg .lb{font:10px var(--font-mono); fill:var(--ink-dim)}
+#cueSvg{position:absolute; top:0; left:0; display:block; z-index:var(--z-cues); pointer-events:none}
+.cue{cursor:grab; touch-action:none}
+.cue .hit{fill:transparent; pointer-events:all}
+.cue :not(.hit){pointer-events:none}
+.cue .stem{stroke:var(--ink-dim); stroke-width:var(--bd); fill:none}
+.cue .dia{fill:var(--panel); stroke:var(--ink-dim); stroke-width:var(--bd)}
+@media (hover:hover){
+  .cue:hover .stem{stroke:var(--ink)}
+  .cue:hover .dia{stroke:var(--ink)}
 }
-.cue::before{
-  content:''; position:absolute; left:7px; top:18px; bottom:0; width:var(--bd);
-  background:var(--ink-dim);
-}
-.cue::after{
-  content:''; position:absolute; left:3px; top:3px; width:12px; height:12px;
-  background:var(--panel); border:var(--bd) solid var(--ink-dim);
-  transform:rotate(45deg);
+.cue.selected .stem{stroke:var(--accent)}
+.cue.selected .dia{fill:var(--accent); stroke:var(--accent)}
+#laneSvg{position:absolute; top:0; left:0; display:block; pointer-events:none}
+.bar{cursor:grab; touch-action:manipulation}
+.bar .hit{fill:transparent; pointer-events:all}
+.bar :not(.hit){pointer-events:none}   /* the padded hit rect is the only target */
+.bar .body{
+  fill:color-mix(in oklab, var(--lane) 16%, var(--bg));
+  stroke:color-mix(in oklab, var(--lane) 55%, var(--line-soft)); stroke-width:var(--bd);
 }
 @media (hover:hover){
-  .cue:hover::before{background:var(--ink)}
-  .cue:hover::after{border-color:var(--ink)}
+  .bar:hover .body{fill:color-mix(in oklab, var(--lane) 28%, var(--bg))}
 }
-.cue.selected::before{background:var(--accent)}
-.cue.selected::after{background:var(--accent); border-color:var(--accent)}
-#lanes{position:absolute; top:0; left:0; right:0; bottom:0}
-.bar{
-  position:absolute; height:54px; border-radius:0;
-  background:color-mix(in oklab, var(--lane) 16%, var(--bg));
-  border:var(--bd) solid color-mix(in oklab, var(--lane) 55%, var(--line-soft));
-  cursor:grab; overflow:hidden; touch-action:none;
+/* outline/box-shadow can't apply to SVG, so the selected chrome is two real shapes */
+.bar .sh{display:none; fill:var(--shadow-ink)}
+.bar.selected .sh{display:block}
+.bar.selected .body{stroke:var(--ink)}
+.bar .wave{fill:var(--lane); opacity:.9}
+.bar .wave.flat{fill:var(--ink-dim); opacity:.3}
+.bar text{
+  paint-order:stroke; stroke:var(--shadow-ink); stroke-width:2px; stroke-linejoin:round;
+  white-space:pre;
 }
-@media (hover:hover){
-  .bar:hover{background:color-mix(in oklab, var(--lane) 28%, var(--bg))}
-}
-.bar.selected{
-  outline:var(--bd) solid var(--ink); outline-offset:-2px;
-  box-shadow:4px 4px 0 0 var(--shadow-ink);
-}
-.bar .wave{position:absolute; inset:0; width:100%; height:100%; opacity:.9}
-.bar .tname{
-  position:absolute; left:var(--s2); top:4px; right:var(--s2);
-  font:400 11px/1.3 var(--font-display); letter-spacing:.03em;
-  color:oklch(97% 0.01 var(--lane-h, 260));
-  text-shadow:0 1px 0 var(--shadow-ink);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.bar .tmeta{
-  position:absolute; left:var(--s2); bottom:4px; right:var(--s2);
-  font:10.5px/1.3 var(--font-mono);
-  color:oklch(86% 0.01 var(--lane-h, 260) / .9);
-  text-shadow:0 1px 0 var(--shadow-ink);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.bar .tdur{
-  position:absolute; right:var(--s2); top:4px;
-  font:700 10.5px var(--font-mono); font-variant-numeric:tabular-nums;
-  color:oklch(86% 0.01 var(--lane-h, 260) / .9);
-  text-shadow:0 1px 0 var(--shadow-ink);
-}
+.bar .tname{font:400 11px var(--font-display); letter-spacing:.03em; fill:oklch(97% 0.01 var(--lane-h, 260))}
+.bar .tmeta{font:10.5px var(--font-mono); fill:oklch(86% 0.01 var(--lane-h, 260) / .9)}
+.bar .tdur{font:700 10.5px var(--font-mono); font-variant-numeric:tabular-nums; fill:oklch(86% 0.01 var(--lane-h, 260) / .9)}
+/* too narrow for words: the clip already stops collisions, this stops the clutter */
+.bar.tiny .tdur, .bar.tiny .tmeta{display:none}
 /* ctrl/cmd held: bars offer a file lift, not a retime */
 body.lift-armed .bar{cursor:copy}
+/* long-pressed: the take is picked up for retime — same shadow-and-stroke language as
+ * .selected, so a lifted take and a selected one read as the same kind of "this one" */
+.bar.picked .sh{display:block; opacity:.55}
+.bar.picked .body{
+  fill:color-mix(in oklab, var(--lane) 34%, var(--bg));
+  stroke:var(--ink); stroke-width:calc(var(--bd) * 2);
+}
 .lift-ghost{
   position:fixed; left:-9999px; top:0; z-index:9999; pointer-events:none;   /* off-screen: setDragImage snapshots it; it must never show itself */
   max-width:280px; padding:6px 10px;
@@ -568,6 +606,123 @@ body.record-mode.has-video #recBig{width:auto; height:60px; padding:0 var(--s4);
 /* last, so it outranks the layout overrides above */
 body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
 
+/* ---------- save page: write the export set into a folder you pick ---------- */
+/* Same cover idiom as #rec — a fixed layer over #app, so the timeline keeps its geometry
+ * underneath and needs no repair on the way back. Neutral ground: this page is
+ * administrative, so it borrows the bg/panel tokens rather than the record page's red. */
+#save{
+  position:fixed; inset:0; z-index:var(--z-save); display:none;
+  background:var(--bg); color:var(--ink);
+  padding:calc(var(--s5) + env(safe-area-inset-top)) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+}
+body.save-mode #save{
+  display:grid; gap:var(--s5);
+  grid-template-columns:minmax(0, 1fr);
+  /* the head and the actions float between two absorbent rows, like the record stack */
+  grid-template-rows:minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-areas:"." "head" "acts" ".";
+  justify-items:center;
+}
+body.save-mode #camPreview{display:none !important}   /* nothing floats over a covering page */
+/* the toast moves up top, clear of the centred action stack */
+body.save-mode #toast{top:calc(var(--s5) + env(safe-area-inset-top)); bottom:auto}
+#saveExit{
+  position:absolute; top:calc(var(--s2) + env(safe-area-inset-top)); right:var(--s2);
+  width:44px; height:44px; padding:0;
+  font:700 14px var(--font-mono);
+  background:transparent; border-color:transparent; color:var(--ink-dim);
+}
+@media (hover:hover){
+  #saveExit:hover{border-color:var(--ink)}
+}
+#saveHead{
+  grid-area:head; width:min(440px, 100%);
+  display:flex; flex-direction:column; gap:var(--s2); text-align:center;
+  padding:0 calc(44px + var(--s3));   /* keeps the centred text clear of the corner ✕ */
+}
+#saveTitle{
+  margin:0; font:400 clamp(18px, 4vw, 26px) / 1.05 var(--font-display);
+  text-transform:uppercase; letter-spacing:.08em;
+}
+#saveFolder{
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.14em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#saveMsg{margin:0; font:13px/1.5 var(--font-ui); color:var(--ink-dim)}
+#saveActs{
+  grid-area:acts; width:min(340px, 100%);
+  display:flex; flex-direction:column; gap:var(--s3); align-items:stretch;
+}
+#saveActs .f-keep{align-self:center}
+#saveGo{height:64px; font:400 20px/1 var(--font-display); text-transform:uppercase; letter-spacing:.16em}
+#savePick{background:transparent}
+#saveProgress{
+  min-height:18px; font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.12em; text-align:center;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* ---------- import page: read our own markdown + YAML back into a session ---------- */
+/* Same cover idiom as #rec and #save — a fixed layer over #app, so the timeline keeps its
+ * geometry underneath and needs no repair on the way back. Administrative ground, like #save:
+ * it borrows the bg/panel tokens rather than the record page's red. */
+#import{
+  position:fixed; inset:0; z-index:var(--z-import); display:none;
+  background:var(--bg); color:var(--ink);
+  padding:calc(var(--s5) + env(safe-area-inset-top)) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));
+}
+body.import-mode #import{
+  display:grid; gap:var(--s5);
+  grid-template-columns:minmax(0, 1fr);
+  /* the head and the actions float between two absorbent rows, like the record stack */
+  grid-template-rows:minmax(0, 1fr) auto auto minmax(0, 1fr);
+  grid-template-areas:"." "head" "acts" ".";
+  justify-items:center;
+}
+body.import-mode #camPreview{display:none !important}   /* nothing floats over a covering page */
+/* the toast moves up top, clear of the centred action stack */
+body.import-mode #toast{top:calc(var(--s5) + env(safe-area-inset-top)); bottom:auto}
+/* the whole page is the drop target, so give the drop a visible home rather than a hidden one */
+body.import-drop #import{background:color-mix(in oklab, var(--bg) 90%, var(--ink))}
+#importExit{
+  position:absolute; top:calc(var(--s2) + env(safe-area-inset-top)); right:var(--s2);
+  width:44px; height:44px; padding:0;
+  font:700 14px var(--font-mono);
+  background:transparent; border-color:transparent; color:var(--ink-dim);
+}
+@media (hover:hover){
+  #importExit:hover{border-color:var(--ink)}
+}
+#importHead{
+  grid-area:head; width:min(440px, 100%);
+  display:flex; flex-direction:column; gap:var(--s2); text-align:center;
+  padding:0 calc(44px + var(--s3));   /* keeps the centred text clear of the corner ✕ */
+}
+#importTitle{
+  margin:0; font:400 clamp(18px, 4vw, 26px) / 1.05 var(--font-display);
+  text-transform:uppercase; letter-spacing:.08em;
+}
+#importHint{
+  font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.14em;
+}
+#importMsg{margin:0; font:13px/1.5 var(--font-ui); color:var(--ink-dim)}
+#importActs{
+  grid-area:acts; width:min(340px, 100%);
+  display:flex; flex-direction:column; gap:var(--s3); align-items:stretch;
+}
+#importPickFolder,#importPickFiles{background:transparent}
+#importProgress{
+  min-height:18px; font:700 11px var(--font-mono); color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.12em; text-align:center;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+@media (max-width:560px){
+  #import{padding-inline:var(--s3)}
+  body.import-mode #import{gap:var(--s3)}
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 560px){
   #top{min-height:60px; padding:var(--s2) var(--s3)}
@@ -575,7 +730,9 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
   /* the bar stacks: transport, full-width record, then the rec page + vid pair */
   #bottomBar{
     grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto auto;
-    padding:var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom));
+    /* the 4px hard shadow on the full-width record button would otherwise be clipped
+     * by html,body{overflow:clip} — so the bar carries the extra room instead */
+    padding:var(--s2) calc(var(--s3) + 4px) calc(var(--s2) + 4px + env(safe-area-inset-bottom));
   }
   #bottomBar .rgroup{justify-self:center}
   #time{min-width:74px}
@@ -583,12 +740,27 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
   #toast{bottom:184px}
   #camPreview{bottom:194px}
   #recBig{width:min(300px, 84vw); height:88px; font-size:24px}
+  #save{padding-inline:var(--s3)}
+  body.save-mode #save{gap:var(--s3)}
+  #saveGo{height:56px; font-size:18px}
   /* phone video bar: timer + pair share a row, the record button goes full-width under */
   body.record-mode.has-video #rec{
     grid-template-columns:minmax(0,1fr) auto;
     grid-template-rows:auto minmax(0,1fr) auto auto;
     grid-template-areas:"title title" "stage stage" "time side" "rec rec";
   }
+}
+/* ---------- coarse pointers: touch-sized chrome ---------- */
+/* any-pointer, not pointer: the latter reflects only the PRIMARY pointer, so it stays
+ * false on a touchscreen laptop even while a finger is on the glass */
+@media (any-pointer: coarse){
+  :root{--gutter:44px}
+  #zoomOut, #zoomIn{width:44px; height:44px}
+  /* the corner recovers the session bpm/key that .m-chip{display:none} removes under 560px */
+  #gutterBpm, #gutterKey{display:block}
+  #gutterCorner{cursor:pointer}
+  .g-cell{padding-left:var(--s1)}
+  .g-sw{width:3px}
 }
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
@@ -602,24 +774,33 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
 
 <header id="top">
   <div id="masthead">
-    <span class="m-chip" id="mastBpm" title="edit bpm"></span>
+    <span class="m-chip" id="mastBpm" data-sec="bpm" title="edit bpm"></span>
     <h1 id="mastTitle" tabindex="0" title="click to rename"></h1>
-    <span class="m-chip" id="mastKey" title="edit key"></span>
+    <span class="m-chip" id="mastKey" data-sec="key" title="edit key"></span>
   </div>
   <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
   <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
   <button id="burger" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
 </header>
 
-<main id="tl">
-  <div id="content">
-    <div id="rulerWrap"><canvas id="ruler" aria-hidden="true"></canvas></div>
-    <div id="cues"></div>
-    <div id="lanes"></div>
-    <div id="playhead" aria-hidden="true"></div>
-    <div id="empty">press record — everything else can wait</div>
-  </div>
-</main>
+<div id="tlWrap">
+  <aside id="gutter" aria-label="Lanes">
+    <div id="gutterCorner">
+      <span class="m-chip" id="gutterBpm" data-sec="bpm" title="edit bpm"></span>
+      <span class="m-chip" id="gutterKey" data-sec="key" title="edit key"></span>
+    </div>
+    <div id="gutterLanes"><ol id="gutterLanesInner"></ol></div>
+  </aside>
+  <main id="tl">
+    <div id="content">
+      <div id="rulerWrap"><svg id="rulerSvg" aria-hidden="true"><path id="rBars" class="bt"/><path id="rTicks" class="tk"/><g id="rLabels"></g></svg></div>
+      <svg id="laneSvg" aria-hidden="true"></svg>
+      <svg id="cueSvg" aria-hidden="true"></svg>
+      <div id="playhead" aria-hidden="true"></div>
+      <div id="empty">press record — everything else can wait</div>
+    </div>
+  </main>
+</div>
 
 <footer id="bottomBar">
   <div class="tgroup">
@@ -648,6 +829,39 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
   </div>
 </section>
 
+<section id="save" aria-label="Save to folder">
+  <button id="saveExit" aria-label="Back to the timeline">✕</button>
+  <header id="saveHead">
+    <h2 id="saveTitle">save to folder</h2>
+    <div id="saveFolder">no folder picked yet</div>
+    <p id="saveMsg">choose a folder, then save — files land in this session's own subfolder</p>
+  </header>
+  <div id="saveActs">
+    <label class="f-keep" title="Save only the takes marked keep"><input id="saveKeepOnly" type="checkbox"><span>keeps only</span></label>
+    <button id="savePick" class="hs">choose folder</button>
+    <button id="saveGo" class="hs">save</button>
+    <div id="saveProgress" role="status" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="import" aria-label="Import">
+  <button id="importExit" aria-label="Back to the timeline">✕</button>
+  <header id="importHead">
+    <h2 id="importTitle">import</h2>
+    <div id="importHint">drop a .zip here, or choose a folder / the export files</div>
+    <p id="importMsg">import adds takes — it never overwrites what's here</p>
+  </header>
+  <div id="importActs">
+    <button id="importPickZip" class="hs">choose .zip</button>
+    <button id="importPickFolder" class="hs">choose folder</button>
+    <button id="importPickFiles" class="hs">choose files</button>
+    <input id="importZipInput" type="file" accept=".zip,application/zip" hidden>
+    <input id="importFolderInput" type="file" hidden>
+    <input id="importFilesInput" type="file" accept=".md,audio/*,video/*" multiple hidden>
+    <div id="importProgress" role="status" aria-live="polite"></div>
+  </div>
+</section>
+
 <div class="ovl" id="menuOvl">
   <div class="scrim" data-close="menu"></div>
   <aside class="panel" role="dialog" aria-modal="true" aria-label="Session menu" id="menuPanel" tabindex="-1">
@@ -661,6 +875,8 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
           <button class="bbtn bbtn-primary hs" id="mExport">export</button>
           <label class="f-keep m-keep" title="Export only the takes marked keep"><input id="mKeepOnly" type="checkbox"><span>keeps only</span></label>
         </div>
+        <button class="bbtn hs" id="mSave">save to folder</button>
+        <button class="bbtn hs" id="mImport">import</button>
         <button class="bbtn hs" id="mRender">render</button>
         <button class="bbtn bbtn-danger hs" id="mNew">new</button>
       </div>
@@ -692,7 +908,8 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
       <b>R</b> record · <b>space</b> play<br>
       double-click the ruler to add a cue<br>
       click a take for details · drag to retime<br>
-      ctrl-drag a take to lift its file out (chrome/edge — drops into your daw)
+      ctrl-drag a take to lift its file out (desktop chrome/edge — drops into your daw)<br>
+      on a touchscreen: drag to pan · tap a take for details · hold it to retime
     </footer>
   </aside>
 </div>
@@ -719,6 +936,9 @@ body.record-mode #recVid:has(input:disabled){opacity:.45; cursor:not-allowed}
 /* ---------- tiny helpers ---------- */
 const $ = s => document.querySelector(s)
 const el = (t, cls) => { const e = document.createElement(t); if (cls) e.className = cls; return e }
+// the timeline's vector layers live in the SVG namespace; classList/dataset still work on them
+const SVGNS = "http://www.w3.org/2000/svg"
+const svgEl = (t, cls) => { const e = document.createElementNS(SVGNS, t); if (cls) e.setAttribute("class", cls); return e }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]))
 const q = s => JSON.stringify(String(s))           // JSON string = valid YAML scalar
@@ -726,7 +946,6 @@ const isoNow = () => new Date().toISOString()
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id" + Math.random().toString(36).slice(2))
 const slug = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "take"
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms) } }
-const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
 const fmtTime = s => { s = Math.max(0, s); const m = Math.floor(s / 60), ss = s - m * 60
   return m + ":" + String(Math.floor(ss)).padStart(2, "0") + "." + Math.floor((ss % 1) * 10) }
 const fmtClock = s => { s = Math.max(0, s); return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") }
@@ -739,7 +958,14 @@ const barPos = sec => {
 }
 
 /* ---------- constants & state ---------- */
-const RULERH = 34, ROWH = 68, BARH = 54
+const ROWH = 68, BARH = 54
+// RULERH is the one metric that moves: the ruler doubles as the seek surface, so on a
+// coarse pointer it grows past the 44px floor. Every arithmetic site reads the variable,
+// and applyMetrics() republishes --rulerh so the sticky ruler and the gutter stay in step.
+let RULERH = 34
+const coarse = () => matchMedia("(any-pointer: coarse)").matches
+// hit-area floor, independent of what's drawn: SVG lets a 16px bar keep a 44px target
+const minTap = () => (coarse() ? 44 : 24)
 const LANES = [ // muted, distinguishable hues (oklch hue angles)
   { h: 230, c: "oklch(72% 0.09 230)" }, { h: 130, c: "oklch(72% 0.1 130)" }, { h: 85,  c: "oklch(76% 0.1 85)" },
   { h: 300, c: "oklch(72% 0.1 300)" }, { h: 350, c: "oklch(72% 0.09 350)" }, { h: 180, c: "oklch(72% 0.09 180)" }
@@ -848,39 +1074,110 @@ function layout(){
   state.contentSec = Math.max(contentEnd() + 30, minSec)
   state.contentPx = Math.ceil(state.contentSec * state.zoom)
 }
+const contentH = () => RULERH + state.lanes * ROWH + 20
 function renderAll(){
   const c = $("#content")
   c.style.width = state.contentPx + "px"
-  c.style.height = (RULERH + state.lanes * ROWH + 20) + "px"
-  const lanes = $("#lanes"); lanes.innerHTML = ""
-  for (const t of state.takes) lanes.appendChild(barEl(t))
+  c.style.height = contentH() + "px"
+  // both svg layers are sized in px rather than stretched, so neither needs a positioned
+  // ancestor: #content stays a plain static block and the playhead keeps spanning #tl
+  const lane = $("#laneSvg")
+  lane.setAttribute("width", state.contentPx); lane.setAttribute("height", contentH())
+  lane.innerHTML = ""
+  for (const t of state.takes) lane.appendChild(barEl(t))
+  const cue = $("#cueSvg")
+  cue.setAttribute("width", state.contentPx); cue.setAttribute("height", RULERH)
+  cue.innerHTML = ""
   $("#empty").style.display = state.takes.length ? "none" : "flex"
   renderCues()
+  renderGutter()
   syncMenu()
+  renderSave()
   sizeRuler(); drawRuler(); syncPlayheadUI(state.playhead)
 }
 function refresh(){ layout(); renderAll() }
 
+/* ---------- gutter & metrics ---------- */
+// the ruler doubles as the seek surface, so its height is the one metric that follows the
+// pointer: 34px is a fine mouse target, 48px clears the 44px touch floor
+function applyMetrics(){
+  RULERH = coarse() ? 48 : 34
+  document.documentElement.style.setProperty("--rulerh", RULERH + "px")
+}
+function syncMetrics(){ applyMetrics(); refresh() }
+// the frozen gutter: one cell per lane at barEl's exact pitch (ROWH tall, 7px inset), so
+// each swatch lands on its lane's bar band whatever the zoom
+function renderGutter(){
+  const inner = $("#gutterLanesInner")
+  inner.innerHTML = ""
+  for (let i = 0; i < state.lanes; i++){
+    const cell = el("li", "g-cell")
+    const sw = el("span", "g-sw")
+    sw.setAttribute("aria-hidden", "true")
+    sw.style.setProperty("--lane", LANES[i % LANES.length].c)
+    const lab = el("span", "g-lab")
+    lab.textContent = String(i + 1)
+    cell.appendChild(sw); cell.appendChild(lab)
+    inner.appendChild(cell)
+  }
+  syncGutter()
+}
+// #tl is the only scroll container; the gutter's lane rows ride its vertical scroll
+function syncGutter(){ $("#gutterLanesInner").style.transform = "translateY(" + -$("#tl").scrollTop + "px)" }
+
+// one bar, as a <g> in #laneSvg. The visual width and the waveform width are the same
+// variable now, so they can no longer disagree; the padded .hit rect is the only target,
+// which is what lets a 16px bar still be tappable.
+const barW = t => Math.max(16, t.duration * state.zoom)
+const barTop = t => RULERH + t.lane * ROWH + 7
+const barXform = t => "translate(" + (t.start * state.zoom) + "," + barTop(t) + ")"
 function barEl(t){
-  const lane = LANES[t.lane % LANES.length]
-  const b = el("div", "bar")
+  const lane = LANES[t.lane % LANES.length], w = barW(t)
+  const b = svgEl("g", "bar")
   b.dataset.id = t.id
-  b.style.left = (t.start * state.zoom) + "px"
-  b.style.width = Math.max(16, t.duration * state.zoom) + "px"
-  b.style.top = (RULERH + t.lane * ROWH + 7) + "px"
+  b.setAttribute("transform", barXform(t))
   b.style.setProperty("--lane", lane.c)
   b.style.setProperty("--lane-h", lane.h)
   if (t.kind === "video") b.classList.add("video")
   if (state.selectedId === t.id) b.classList.add("selected")
-  const cv = el("canvas", "wave"); cv.setAttribute("aria-hidden", "true"); b.appendChild(cv)
-  const nm = el("div", "tname"); nm.textContent = t.name; b.appendChild(nm)
-  const du = el("div", "tdur"); du.textContent = fmtClock(t.duration); b.appendChild(du)
-  const me = el("div", "tmeta"); me.textContent = barMeta(t); b.appendChild(me)
-  drawWave(t, cv)
+  if (w < 72) b.classList.add("tiny")
+  const ti = svgEl("title")
+  ti.textContent = t.name + " · " + barMeta(t)
+  b.appendChild(ti)
+  const pad = Math.max(0, (minTap() - w) / 2)          // grow the target, not the bar
+  const hit = svgEl("rect", "hit")
+  hit.setAttribute("x", -pad); hit.setAttribute("y", -7)
+  hit.setAttribute("width", w + pad * 2); hit.setAttribute("height", ROWH)
+  b.appendChild(hit)
+  const sh = svgEl("rect", "sh")                       // the hard shadow, drawn only when selected
+  sh.setAttribute("x", 4); sh.setAttribute("y", 4)
+  sh.setAttribute("width", w); sh.setAttribute("height", BARH)
+  b.appendChild(sh)
+  const body = svgEl("rect", "body")
+  body.setAttribute("width", w); body.setAttribute("height", BARH)
+  b.appendChild(body)
+  const wave = svgEl("path", "wave")
+  b.appendChild(wave); drawWave(t, wave)
+  // text can't ellipsize in SVG, so it's clipped to the box — the clip stops short of the
+  // duration column, which is what used to let .tdur paint straight over the name
+  const clip = svgEl("clipPath"); clip.id = clipId(t)
+  const cr = svgEl("rect")
+  cr.setAttribute("x", 8); cr.setAttribute("y", 0)
+  cr.setAttribute("width", Math.max(0, w - 16 - (w < 72 ? 0 : 44))); cr.setAttribute("height", BARH)
+  clip.appendChild(cr); b.appendChild(clip)
+  const txt = svgEl("g"); txt.setAttribute("clip-path", "url(#" + clipId(t) + ")")
+  const nm = svgEl("text", "tname"); nm.setAttribute("x", 8); nm.setAttribute("y", 14)
+  const me = svgEl("text", "tmeta"); me.setAttribute("x", 8); me.setAttribute("y", BARH - 6)
+  txt.appendChild(nm); txt.appendChild(me); b.appendChild(txt)
+  const du = svgEl("text", "tdur")
+  du.setAttribute("x", w - 8); du.setAttribute("y", 14); du.setAttribute("text-anchor", "end")
+  b.appendChild(du)
   attachBarEvents(b, t)
   t.el = b
+  updateBarText(t)
   return b
 }
+const clipId = t => "barclip-" + t.id
 function barMeta(t){
   const bits = []
   if (t.bpm) bits.push(t.bpm + " bpm")
@@ -892,78 +1189,131 @@ function barMeta(t){
   bits.push(t.kind + "." + deliveredExt(t))
   return bits.join(" · ")
 }
+// the one place a bar re-reads its take: geometry first (a decode refines duration, and the
+// bar's width follows it), then text. Everything that used to be a style.left/width pair is
+// an attribute now, so the box and the waveform can't disagree about how wide they are.
 function updateBarText(t){
-  if (!t.el) return
-  t.el.querySelector(".tname").textContent = t.name
-  t.el.querySelector(".tmeta").textContent = barMeta(t)
-  t.el.querySelector(".tdur").textContent = fmtClock(t.duration)
+  const b = t.el
+  if (!b) return
+  const w = barW(t), tiny = w < 72, pad = Math.max(0, (minTap() - w) / 2)
+  b.setAttribute("transform", barXform(t))
+  b.classList.toggle("tiny", tiny)
+  const hit = b.querySelector(".hit")
+  hit.setAttribute("x", -pad)
+  hit.setAttribute("width", w + pad * 2)
+  hit.setAttribute("height", ROWH)
+  b.querySelectorAll(".sh, .body").forEach(r => r.setAttribute("width", w))
+  b.querySelector("clipPath rect").setAttribute("width", Math.max(0, w - 16 - (tiny ? 0 : 44)))
+  const du = b.querySelector(".tdur")
+  du.setAttribute("x", w - 8)
+  du.textContent = fmtClock(t.duration)
+  b.querySelector(".tname").textContent = t.name
+  b.querySelector(".tmeta").textContent = barMeta(t)
+  b.querySelector("title").textContent = t.name + " · " + barMeta(t)
+  const wave = b.querySelector(".wave"), sig = w + ":" + (t.peaks ? t.peaks.length : 0)
+  if (wave.dataset.sig !== sig){ wave.dataset.sig = sig; drawWave(t, wave) }
 }
-function drawWave(t, cv){
-  const w = Math.max(1, Math.round(t.duration * state.zoom)), h = BARH
-  const dpr = window.devicePixelRatio || 1
-  cv.width = Math.min(16000, Math.max(1, Math.round(w * dpr)))
-  cv.height = Math.round(h * dpr)
-  const g = cv.getContext("2d")
-  g.scale(dpr, dpr)
-  if (!t.peaks){ g.fillStyle = cssVar("--ink-dim"); g.globalAlpha = .3; g.fillRect(0, h / 2 - 1, w, 2); g.globalAlpha = 1; return }
-  const lane = LANES[t.lane % LANES.length]
-  g.fillStyle = lane.c
-  const n = t.peaks.length
-  for (let x = 0; x < w; x += 2){
-    const p = t.peaks[Math.min(n - 1, Math.floor(x / w * n))]
-    const bh = Math.max(1, p * (h - 10))
-    g.fillRect(x, (h - bh) / 2, 1.4, bh)
+// the waveform is one filled envelope, not a run of 1.4px bars: peaks are per-bucket maxima
+// at ~60/s, so a column every 2px already out-resolves the source. The 800-column cap is a
+// budget on the path string — at zoom 200 a long take would otherwise emit tens of
+// thousands of nodes into one `d` attribute.
+function drawWave(t, path){
+  const w = barW(t), mid = BARH / 2
+  if (!t.peaks){
+    path.classList.add("flat")
+    path.setAttribute("d", "M0 " + (mid - 1) + "H" + w.toFixed(1) + "V" + (mid + 1) + "H0Z")
+    return
   }
+  path.classList.remove("flat")
+  const n = t.peaks.length, cols = Math.max(8, Math.min(800, Math.round(w / 2)))
+  const top = [], bot = []
+  for (let i = 0; i < cols; i++){
+    const p = t.peaks[Math.min(n - 1, Math.floor(i / cols * n))]
+    const bh = Math.max(1, p * (BARH - 10)) / 2, x = +(i / (cols - 1) * w).toFixed(1)
+    top.push(x + " " + (mid - bh).toFixed(1))
+    bot.push(x + " " + (mid + bh).toFixed(1))
+  }
+  path.setAttribute("d", "M" + top.join("L") + "L" + bot.reverse().join("L") + "Z")
 }
 
 /* ---------- ruler ---------- */
+// the ruler is the one sticky layer: rulerWrap keeps its box and stays pinned, and the svg
+// inside it is sized to the scrollport — not to the content — because ticks are redrawn
+// against scrollLeft on every scroll rather than scrolled.
 function sizeRuler(){
-  const tl = $("#tl")
-  $("#rulerWrap").style.width = tl.clientWidth + "px"
+  const tl = $("#tl"), w = tl.clientWidth
+  const svg = $("#rulerSvg")
+  $("#rulerWrap").style.width = w + "px"
+  svg.setAttribute("width", w)
+  svg.setAttribute("height", RULERH)
 }
+const rulerLabels = []
 function drawRuler(){
-  const tl = $("#tl"), w = tl.clientWidth, cv = $("#ruler")
-  const dpr = window.devicePixelRatio || 1
-  cv.width = Math.round(w * dpr); cv.height = Math.round(RULERH * dpr)
-  const g = cv.getContext("2d"); g.scale(dpr, dpr)
+  const tl = $("#tl"), w = tl.clientWidth, svg = $("#rulerSvg")
+  svg.setAttribute("width", w); svg.setAttribute("height", RULERH)
   const off = tl.scrollLeft, z = state.zoom
   const steps = [ 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200 ]
   const step = steps.find(s => s * z >= 72) || 1200
-  g.font = "10px " + cssVar("--font-mono")
-  g.strokeStyle = cssVar("--line")
-  g.fillStyle = cssVar("--ink-dim")
   const first = Math.max(0, Math.floor(off / z / step) * step)
+  const ticks = [], labels = []
   for (let s = first; s * z <= off + w; s += step){
-    const x = Math.round(s * z - off) + .5
-    g.beginPath(); g.moveTo(x, RULERH - 8); g.lineTo(x, RULERH - 1); g.stroke()
-    g.fillText(fmtClock(s), x + 4, 14)
+    const x = +(s * z - off).toFixed(1)
+    ticks.push("M" + (x + .5) + " " + (RULERH - 8) + "V" + (RULERH - 1))
+    labels.push([ x + 4, fmtClock(s) ])
   }
   // bar ticks along the bottom edge when the session has a bpm (taller every 4 bars)
-  const bpm = state.session.bpm
-  if (bpm){
-    const barSec = 240 / bpm
-    g.strokeStyle = cssVar("--accent")
-    g.globalAlpha = .55
+  const bars = []
+  if (state.session.bpm){
+    const barSec = 240 / state.session.bpm
     for (let b = Math.max(1, Math.floor(off / z / barSec)); b * barSec * z <= off + w; b++){
-      const x = Math.round(b * barSec * z - off) + .5
-      const major = (b - 1) % 4 === 0
-      g.beginPath(); g.moveTo(x, RULERH - (major ? 7 : 4)); g.lineTo(x, RULERH - 1); g.stroke()
+      const x = +(b * barSec * z - off).toFixed(1)
+      bars.push("M" + (x + .5) + " " + (RULERH - ((b - 1) % 4 === 0 ? 7 : 4)) + "V" + (RULERH - 1))
     }
-    g.globalAlpha = 1
   }
+  $("#rTicks").setAttribute("d", ticks.join("") || "M0 0")
+  $("#rBars").setAttribute("d", bars.join("") || "M0 0")
+  // labels are pooled: this runs on every scroll event, so node churn has to stay at zero
+  const g = $("#rLabels")
+  while (rulerLabels.length < labels.length){
+    const t = svgEl("text", "lb")
+    g.appendChild(t); rulerLabels.push(t)
+  }
+  rulerLabels.forEach((t, i) => {
+    const l = labels[i]
+    if (!l){ t.style.display = "none"; return }
+    t.style.display = ""
+    t.setAttribute("x", l[0]); t.setAttribute("y", 14)
+    t.textContent = l[1]
+  })
 }
 
 /* ---------- cues ---------- */
 function cueById(id){ return state.cues.find(c => c.id === id) }
+const cueX = c => "translate(" + (c.pos * state.zoom) + ",0)"
+// a cue was a 16px div with ::before/::after pseudo-elements — a stem and a rotated square.
+// SVG has no pseudo-elements, so both become real children, and the stem/diamond are the
+// same 16px wide as before while the .hit rect underneath can be 44px on a phone.
 function renderCues(){
-  const wrap = $("#cues")
+  const wrap = $("#cueSvg")
   wrap.innerHTML = ""
   for (const c of state.cues){
-    const d = el("div", "cue")
+    const d = svgEl("g", "cue")
     d.dataset.id = c.id
-    d.style.left = (c.pos * state.zoom) + "px"
+    d.setAttribute("transform", cueX(c))
     if (state.selectedCueId === c.id) d.classList.add("selected")
-    d.title = cueTitle(c)
+    const ti = svgEl("title")
+    ti.textContent = cueTitle(c)
+    const pad = Math.max(0, (minTap() - 16) / 2)
+    const hit = svgEl("rect", "hit")
+    hit.setAttribute("x", -(8 + pad)); hit.setAttribute("y", 0)
+    hit.setAttribute("width", 16 + pad * 2); hit.setAttribute("height", RULERH)
+    const stem = svgEl("path", "stem")
+    stem.setAttribute("d", "M0 18V" + RULERH)
+    const dia = svgEl("rect", "dia")
+    dia.setAttribute("x", -6); dia.setAttribute("y", 3)
+    dia.setAttribute("width", 12); dia.setAttribute("height", 12)
+    dia.setAttribute("transform", "rotate(45 0 9)")
+    d.appendChild(ti); d.appendChild(hit); d.appendChild(stem); d.appendChild(dia)
     attachCueEvents(d, c)
     wrap.appendChild(d)
   }
@@ -976,8 +1326,8 @@ function cueTitle(c){
   return bits.join(" · ")
 }
 function syncCueDom(c){
-  const d = $('#cues .cue[data-id="' + c.id + '"]')
-  if (d) d.title = cueTitle(c)
+  const d = $('#cueSvg .cue[data-id="' + c.id + '"]')
+  if (d) d.querySelector("title").textContent = cueTitle(c)
 }
 function attachCueEvents(d, c){
   let px0 = 0, p0 = 0, moved = false, dragging = false
@@ -993,15 +1343,15 @@ function attachCueEvents(d, c){
     if (Math.abs(dx) > 3) moved = true
     if (moved){
       c.pos = Math.max(0, p0 + dx / state.zoom)
-      d.style.left = (c.pos * state.zoom) + "px"
+      d.setAttribute("transform", cueX(c))
     }
   })
   d.addEventListener("pointerup", () => {
     dragging = false
-    if (moved){ saveCues(); renderCues(); d.title = cueTitle(c); refreshViewIfCue() }
+    if (moved){ saveCues(); renderCues(); refreshViewIfCue() }
     else selectCue(c.id)
   })
-  d.addEventListener("dblclick", () => {})   // dblclick on ruler handles creation
+  d.addEventListener("pointercancel", () => { dragging = false })
 }
 function selectCue(id){
   state.selectedId = null
@@ -1038,53 +1388,38 @@ function deleteCue(id){
   closeView()
 }
 
-/* ---------- bar drag & select ---------- */
-// ctrl/cmd at pointerdown arms a lift instead: native html5 dnd takes over and the
-// bar drags out of the browser as a real file (chrome/edge via DownloadURL).
-// toggling draggable mid-press is what lets pointer-drag retime and dnd coexist.
+/* ---------- lift: ctrl/cmd-drag a take out as a real file ---------- */
+// Blink will not start a native drag from an SVG element: `draggable` on the <g> is inert
+// (mousedown fires, dragstart never does). So the drag source has to stay an HTML element —
+// #content takes the attribute while ctrl/cmd is held, and the take is worked out from the
+// pointer at dragstart. Blink walks up from the rect under the cursor to the nearest
+// draggable ancestor, which is what lets this reach through the SVG layers.
 let dragUrl = null, liftGhost = null
+function armLift(on){
+  document.body.classList.toggle("lift-armed", on)
+  $("#content").draggable = on
+}
 // hold ctrl/cmd anywhere and bars switch to lift mode (cursor + ghost affordance)
 document.addEventListener("keydown", e => {
-  if (e.key === "Control" || e.key === "Meta") document.body.classList.add("lift-armed")
+  if (e.key === "Control" || e.key === "Meta") armLift(true)
 })
 document.addEventListener("keyup", e => {
-  if (e.key === "Control" || e.key === "Meta") document.body.classList.remove("lift-armed")
+  if (e.key === "Control" || e.key === "Meta") armLift(false)
 })
-window.addEventListener("blur", () => document.body.classList.remove("lift-armed"))
-function attachBarEvents(b, t){
-  let px0 = 0, s0 = 0, moved = false, dragging = false, liftPress = false
-  b.addEventListener("pointerdown", e => {
-    if (e.button !== 0) return
-    const lift = e.ctrlKey || e.metaKey
-    b.draggable = lift
-    if (lift){ moved = false; liftPress = true; e.stopPropagation(); return }   // the lift owns this press: no retime, no select
-    liftPress = false
-    px0 = e.clientX; s0 = t.start; moved = false; dragging = true
-    try { b.setPointerCapture(e.pointerId) } catch (err) { /* ignore */ }
-    e.stopPropagation()
-  })
-  b.addEventListener("pointermove", e => {
-    if (!dragging) return
-    const dx = e.clientX - px0
-    if (Math.abs(dx) > 3) moved = true
-    if (moved){
-      t.start = Math.max(0, s0 + dx / state.zoom)
-      b.style.left = (t.start * state.zoom) + "px"
-      $("#time").textContent = "@ " + fmtTime(t.start)
-    }
-  })
-  b.addEventListener("pointerup", () => {
-    dragging = false
-    b.draggable = false
-    if (liftPress){ liftPress = false; return }   // ctrl-click that never lifted — deliberate no-op
-    if (moved){ idbPutTake(t); refresh(); updateTimeReadout() }
-    else select(t.id)
-  })
-  b.addEventListener("pointercancel", () => {
-    dragging = false
-    b.draggable = false
-  })
-  b.addEventListener("dragstart", e => {
+window.addEventListener("blur", () => armLift(false))
+// which take sits under a client point — read in #tl's own scrolled coordinates
+function takeAt(clientX, clientY){
+  const tl = $("#tl"), r = tl.getBoundingClientRect()
+  const sec = (clientX - r.left + tl.scrollLeft) / state.zoom
+  const lane = Math.floor((clientY - r.top + tl.scrollTop - RULERH) / ROWH)
+  if (lane < 0) return null
+  return state.takes.find(t => t.lane === lane && sec >= t.start && sec <= t.start + t.duration) || null
+}
+function attachLiftDrag(){
+  const c = $("#content")
+  c.addEventListener("dragstart", e => {
+    const t = takeAt(e.clientX, e.clientY)
+    if (!t){ e.preventDefault(); return }    // nothing under the press — leave it a scrub
     const name = takeBaseName(t, takeIndex(t), new Set())
     const ext = deliveredExt(t)
     const media = deliveredMedia(t)
@@ -1100,15 +1435,148 @@ function attachBarEvents(b, t){
     e.dataTransfer.setDragImage(ghost, 12, 12)
     liftGhost = ghost
   })
-  b.addEventListener("dragend", () => {
-    b.draggable = false
-    liftPress = false
+  c.addEventListener("dragend", () => {
     if (liftGhost){ liftGhost.remove(); liftGhost = null }
     if (dragUrl){ const u = dragUrl; dragUrl = null; setTimeout(() => URL.revokeObjectURL(u), 60000) }
   })
 }
 
+/* ---------- touch gestures ---------- */
+// A hold that stays still for 400ms changes what the press means: on a take it lifts the take
+// into retime, on the ruler or the empty lanes it drops a cue — the touch twin of the
+// double-click, which no phone can reach. Nothing is prevented before the hold fires, so a
+// press that moves past the slop is simply handed back to the browser as an ordinary pan.
+const HOLDDELAY = 400, HOLDSLOP = 8
+let hold = null, pick = null
+
+function endHold(){
+  if (!hold) return
+  clearTimeout(hold.timer)
+  hold = null
+}
+function holdStart(e, fire){
+  endHold()
+  const h = { x: e.clientX, y: e.clientY, fired: false }
+  h.timer = setTimeout(() => { hold = null; h.fired = true; fire() }, HOLDDELAY)
+  hold = h
+  return h
+}
+// the slop check is global so it covers bars, cues and the background alike
+window.addEventListener("pointermove", e => {
+  if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > HOLDSLOP) endHold()
+})
+// Once the finger has been still, the retime is driven from raw touch coordinates rather than
+// pointer events. That is deliberate: the first cancelled touchmove is what stops the scroller
+// from ever taking the gesture, and a gesture that never used pointers cannot be pointercancel'd.
+function beginPick(b, t, e){
+  endPick()
+  const p = { el: b, t, x0: e.clientX, s0: t.start, dx: 0 }
+  p.move = ev => {
+    const ft = ev.touches[0]
+    if (!ft) return
+    ev.preventDefault()
+    p.dx = ft.clientX - p.x0
+    t.start = Math.max(0, p.s0 + p.dx / state.zoom)
+    b.setAttribute("transform", barXform(t))
+    $("#time").textContent = "@ " + fmtTime(t.start)
+  }
+  // silent = a blur or a second finger, which commits the retime but never opens a panel
+  p.end = silent => {
+    const moved = Math.abs(p.dx) > 3
+    endPick()
+    if (moved){ idbPutTake(t); refresh(); updateTimeReadout() }
+    else if (!silent) select(t.id)      // held still, then let go: still a tap
+  }
+  p.onEnd = () => p.end(false)
+  pick = p
+  b.classList.add("picked")
+  navigator.vibrate?.(10)               // a no-op on iOS — there the lift is the whole affordance
+  window.addEventListener("touchmove", p.move, { passive: false })
+  window.addEventListener("touchend", p.onEnd)
+  window.addEventListener("touchcancel", p.onEnd)
+}
+function endPick(){
+  if (!pick) return
+  const p = pick
+  pick = null
+  window.removeEventListener("touchmove", p.move)
+  window.removeEventListener("touchend", p.onEnd)
+  window.removeEventListener("touchcancel", p.onEnd)
+  p.el.classList.remove("picked")
+}
+// every way a gesture can end, so nothing outlives the finger
+function endGesture(){
+  endHold()
+  if (pick) pick.end(true)
+}
+// A tap on a take or a cue selects it, and the browser then synthesises a click at the same
+// point — which lands on whatever the tap just opened, i.e. the detail panel's scrim, and
+// closes it again. Cancelling touchend is the spec'd way to stop that click existing at all.
+window.addEventListener("touchend", e => {
+  if (e.target.closest && e.target.closest(".bar, .cue")) e.preventDefault()
+}, { passive: false })
+window.addEventListener("blur", endGesture)
+document.addEventListener("visibilitychange", endGesture)
+window.addEventListener("pointerdown", e => { if (e.pointerType === "touch" && pick) endGesture() })
+
+/* ---------- bar drag & select ---------- */
+function attachBarEvents(b, t){
+  let px0 = 0, s0 = 0, moved = false, dragging = false, liftPress = false
+  b.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return
+    if (e.ctrlKey || e.metaKey){                                  // the lift owns this press:
+      liftPress = true; e.stopPropagation(); return               // no retime, no select
+    }
+    liftPress = false
+    moved = false; dragging = false
+    if (e.pointerType === "touch"){
+      // no pointer capture and no preventDefault: the finger has to stay free to pan, since a
+      // quick drag on a take is the phone's way of moving the timeline
+      e.stopPropagation()
+      holdStart(e, () => beginPick(b, t, e))
+      return
+    }
+    px0 = e.clientX; s0 = t.start; dragging = true
+    try { b.setPointerCapture(e.pointerId) } catch (err) { /* ignore */ }
+    e.stopPropagation()
+  })
+  b.addEventListener("pointermove", e => {
+    if (e.pointerType === "touch") return       // the hold owns the touch move, or the browser does
+    if (!dragging) return
+    const dx = e.clientX - px0
+    if (Math.abs(dx) > 3) moved = true
+    if (moved){
+      t.start = Math.max(0, s0 + dx / state.zoom)
+      b.setAttribute("transform", barXform(t))
+      $("#time").textContent = "@ " + fmtTime(t.start)
+    }
+  })
+  b.addEventListener("pointerup", e => {
+    if (e.pointerType === "touch"){
+      endHold()
+      if (pick && pick.t === t) return          // the pickup owns this release
+      if (!moved) select(t.id)                  // a tap on a take opens its details
+      return
+    }
+    dragging = false
+    if (liftPress){ liftPress = false; return }   // ctrl-click that never lifted — deliberate no-op
+    if (moved){ idbPutTake(t); refresh(); updateTimeReadout() }
+    else select(t.id)
+  })
+  b.addEventListener("pointercancel", () => { dragging = false; liftPress = false; endHold() })
+}
+
 /* ---------- select & metadata panel ---------- */
+// scrollIntoView is unreliable on SVG geometry, so reveal by arithmetic instead — same
+// margin rule followPlayhead uses, applied on both axes
+function revealTake(t){
+  const tl = $("#tl"), pad = 60
+  const x = t.start * state.zoom, y = barTop(t)
+  if (x < tl.scrollLeft) tl.scrollLeft = Math.max(0, x - pad)
+  else if (x > tl.scrollLeft + tl.clientWidth - pad) tl.scrollLeft = x - tl.clientWidth + pad
+  if (y < tl.scrollTop + RULERH) tl.scrollTop = Math.max(0, y - RULERH)
+  else if (y + BARH > tl.scrollTop + tl.clientHeight) tl.scrollTop = y + BARH - tl.clientHeight
+}
 function select(id){
   state.selectedId = id
   state.selectedCueId = null
@@ -1117,7 +1585,7 @@ function select(id){
   const t = takeById(id)
   if (t && t.el){
     t.el.classList.add("selected")
-    t.el.scrollIntoView({ block: "nearest", inline: "nearest" })
+    revealTake(t)
   }
   if (t) openView(); else closeView()
 }
@@ -1148,12 +1616,22 @@ function openMenu(){
   document.body.classList.add("menu-open")
   $("#burger").setAttribute("aria-expanded", "true")
 }
-function closeMenu(){
+// `after` runs once the close has settled, for actions that move to another page: the menu
+// scrim must be gone before the target page takes focus, or it steals it back
+function closeMenu(after){
   closeOvl("#menuOvl", () => {
     document.body.classList.remove("menu-open")
     $("#burger").setAttribute("aria-expanded", "false")
-    $("#burger").focus({ preventScroll: true })
+    if (after) after()
+    else $("#burger").focus({ preventScroll: true })
   })
+}
+// open the menu already scrolled to bpm or key — shared by the masthead chips and the
+// gutter corner chips, which is why both carry data-sec rather than ids
+function openMetaSec(sec){
+  openMenu()
+  const anchor = sec === "bpm" ? $("#bpmVal") : $("#keyMajor")
+  anchor.closest(".m-sec").scrollIntoView({ block: "nearest" })
 }
 function syncMenu(){
   const s = state.session
@@ -1165,6 +1643,11 @@ function syncMenu(){
     b.disabled = !has
     b.title = has ? "" : "record something first"
   }
+  // stay enabled without the folder API, so the page can explain itself rather than the
+  // feature vanishing unexplained
+  $("#mSave").disabled = !has
+  $("#mSave").title = !has ? "record something first"
+    : canSaveToFolder() ? "" : "this browser can't write into a folder"
   document.querySelectorAll(".keygrid button").forEach(b => {
     b.classList.toggle("on", !!s.key && b.dataset.key === s.key)
   })
@@ -1425,9 +1908,9 @@ function commitTake({ blob, kind, start, duration, mime, recordedAt }){
   state.takes.push(t)
   refresh()
   ensurePeaks(t)
-  // select() opens the detail panel, which would land on top of the red page after every
+  // select() opens the detail panel, which would land on top of a cover page after every
   // take; there, confirm the save and leave the user where they are
-  if (state.page === "record") toast(t.name + " saved")
+  if (COVER_PAGES.has(state.page)) toast(t.name + " saved")
   else select(t.id)
   idbPutTake(t)
   return t
@@ -1484,20 +1967,31 @@ async function syncVideoPreview(){
   }
 }
 // the DOM half of a page switch, kept separate so boot can apply a page without stealing focus
+// pages that COVER #app rather than live beside it: they own the screen, the inert timeline
+// and the keys — the transport never runs behind them
+const COVER_PAGES = new Set([ "record", "save", "import" ])
 function applyView(focus = true){
-  const on = state.page === "record"
-  document.body.classList.toggle("record-mode", on)
-  document.body.classList.toggle("has-video", on && $("#videoChk").checked)
-  $("#app").inert = on                  // set before focusing, or the covered page takes it back
-  $("#recModeBtn").setAttribute("aria-pressed", on ? "true" : "false")
+  const rec = state.page === "record", save = state.page === "save", imp = state.page === "import"
+  document.body.classList.toggle("record-mode", rec)
+  document.body.classList.toggle("save-mode", save)
+  document.body.classList.toggle("import-mode", imp)
+  document.body.classList.toggle("has-video", rec && $("#videoChk").checked)
+  $("#app").inert = COVER_PAGES.has(state.page)   // set before focusing, or the covered page takes it back
+  $("#recModeBtn").setAttribute("aria-pressed", rec ? "true" : "false")
   if (!focus) return
-  if (on) $("#recBig").focus({ preventScroll: true })
+  if (rec) $("#recBig").focus({ preventScroll: true })
+  else if (save){
+    const go = $("#saveGo")
+    const target = go.disabled ? $("#saveExit") : go   // never focus a disabled button
+    target.focus({ preventScroll: true })
+  }
+  else if (imp) $("#importPickZip").focus({ preventScroll: true })
   else $("#recModeBtn").focus({ preventScroll: true })
 }
 function setPage(page){
   state.page = page
-  if (page === "record"){
-    pausePlayback()                     // there is no transport on the red page
+  if (COVER_PAGES.has(page)){
+    pausePlayback()                     // neither cover page has a transport
     if (ovlIsOpen("#menuOvl")) closeMenu()
     if (ovlIsOpen("#viewOvl")) dismissView()
   }
@@ -1506,6 +2000,8 @@ function setPage(page){
   setRecLabels(!!rec)
   if (rec) writeElapsed((performance.now() - rec.startWall) / 1000)
   syncVideoPreview()
+  if (page === "save"){ renderSave(); refreshSavePerm() }
+  else if (page === "import") renderImport()
   idbSetMeta("page", page)
 }
 
@@ -1631,7 +2127,11 @@ function takeEntry(t, i, used){
 function takeMarkdown(t, mediaName){
   const y = [ "---" ]
   y.push("title: " + q(t.name))
+  y.push("id: " + q(t.id))            // the take's stable id — lets a re-import match takes across renames
   y.push("media: " + q(mediaName))
+  // audio|video: the container can't tell us — an audio take exports as .wav, but its
+  // original .webm reads back from disk as video/webm
+  y.push("kind: " + t.kind)
   y.push("start: " + t.start.toFixed(2))
   y.push("duration: " + t.duration.toFixed(2))
   y.push("recorded: " + q(t.recordedAt))
@@ -1651,6 +2151,14 @@ function cuesMarkdown(){
   y.push("title: " + q("Cues — " + (state.session.name || "Session " + (state.session.created || "").slice(0, 10))))
   y.push("cues: " + state.cues.length)
   if (state.session.bpm) y.push("bpm: " + state.session.bpm)
+  // machine-readable cues, to the hundredth of a second — the prose below truncates to
+  // whole seconds, so a round trip through it would lose sub-second cue positions
+  y.push("cue_list:" + (state.cues.length ? "" : " []"))
+  for (const c of state.cues){
+    y.push("  - pos: " + c.pos.toFixed(2))
+    y.push("    name: " + q(c.name || ""))
+    if (c.notes) y.push("    notes: " + q(c.notes))
+  }
   y.push("---", "")
   for (const c of state.cues){
     const head = "**" + fmtClock(c.pos) + (barPos(c.pos) ? " (bar " + barPos(c.pos) + ")" : "") + (c.name ? " — " + c.name : "") + "**"
@@ -1670,6 +2178,8 @@ function sessionMarkdown(entries){
   y.push("created: " + q(s.created))
   y.push("exported: " + q(isoNow()))
   y.push("takes: " + entries.length)
+  y.push("media:" + (entries.length ? "" : " []"))   // every media file in the export, block-style so each reads as a link
+  for (const e of entries) y.push("  - " + q(e.mediaName))
   y.push("---", "", "")
   for (const e of entries){
     const t = e.t, bits = [ fmtClock(t.start) + "–" + fmtClock(t.start + t.duration) ]
@@ -1821,6 +2331,17 @@ async function downloadTake(t){
     btn.disabled = false
   }
 }
+// the canonical export file set — the session index, cues, then one .md + media per take.
+// Shared by the zip download and the folder save so the two can never drift.
+async function exportFiles(src){
+  const entries = await buildExport(src)     // decodes audio so it can be written as WAV
+  const files = [ { name: "session.md", text: sessionMarkdown(entries) }, { name: "cues.md", text: cuesMarkdown() } ]
+  for (const e of entries){
+    files.push({ name: e.name + ".md", text: e.md })
+    files.push({ name: e.mediaName, data: e.mediaData })
+  }
+  return { files, entries }                  // entries let the folder save map files back to takes
+}
 async function doExport(){
   const keepsOnly = $("#mKeepOnly").checked
   const src = keepsOnly ? state.takes.filter(t => t.keep) : state.takes
@@ -1828,12 +2349,7 @@ async function doExport(){
   const mExport = $("#mExport"), label = mExport.textContent
   mExport.disabled = true; mExport.dataset.busy = "true"; mExport.textContent = "zipping\u2026"
   try {
-    const entries = await buildExport(src)
-    const files = [ { name: "session.md", text: sessionMarkdown(entries) }, { name: "cues.md", text: cuesMarkdown() } ]
-    for (const e of entries){
-      files.push({ name: e.name + ".md", text: e.md })
-      files.push({ name: e.mediaName, data: e.mediaData })
-    }
+    const { files } = await exportFiles(src)
     downloadBlob(await buildZipBlob(files), exportBase() + ".zip")
     toast("zip downloaded — " + files.length + " files")
   } catch (err){ toast("export failed: " + (err.message || err)) }
@@ -1841,6 +2357,606 @@ async function doExport(){
     mExport.textContent = label
     mExport.removeAttribute("data-busy")
     mExport.disabled = !state.takes.length
+  }
+}
+
+/* ---------- save page: write the export set straight into a folder you pick ---------- */
+// The File System Access API hands us a real directory handle, so the project lands on disk
+// unzipped — loose markdown + media a person can read, diff and version. Chromium only;
+// browsers without it get an explanation on the page rather than a dead button.
+const canSaveToFolder = () => typeof window.showDirectoryPicker === "function"
+const PERM = { mode: "readwrite" }
+let saveDir = null        // FileSystemDirectoryHandle the user pointed at — persisted in IDB meta
+let saveFolder = ""       // this session's subfolder name, resolved on entering the page
+let saveBusy = false
+
+// queryPermission is free at any time; requestPermission needs transient activation, so it is
+// only ever reached with a live click behind it
+async function dirPerm(dir, request = false){
+  if (!dir) return "denied"
+  try {
+    let p = await dir.queryPermission(PERM)
+    if (p === "prompt" && request) p = await dir.requestPermission(PERM)
+    return p
+  } catch (e){ return "prompt" }
+}
+async function pickSaveDir(){
+  try {
+    const dir = await window.showDirectoryPicker({ id: "rough-cut-content", mode: "readwrite" })
+    saveDir = dir
+    idbSetMeta("saveDir", dir)     // a directory handle structured-clones cleanly into IndexedDB
+    return dir
+  } catch (err){
+    if (!err || err.name !== "AbortError") toast("couldn't open that folder: " + (err.name || err.message))
+    return null                    // a cancelled picker is not an error
+  }
+}
+async function resolveSaveDir(){
+  if (saveDir){
+    const p = await dirPerm(saveDir, true)
+    if (p === "granted") return saveDir
+    saveDir = null                 // a denial sticks to the handle — re-picking is the way back
+  }
+  return pickSaveDir()
+}
+// this session's own folder, stable for its whole life: the export prefix minus the export
+// moment's seconds stamp. If a previous save recorded a different session owning this name
+// (two same-day, same-title sessions — filePrefix truncates the date), append the session's
+// creation clock so the two can never share a folder and prune each other's files.
+async function resolveFolderName(){
+  const base = filePrefix(state.session.name, state.session.bpm, state.session.key, state.session.created)
+  const owner = await idbGetMeta("savedOwner:" + base)
+  saveFolder = owner && owner !== state.session.created
+    ? base + "-" + state.session.created.slice(11, 19).replaceAll(":", "")
+    : base
+  return saveFolder
+}
+const savedFilesKey = () => "savedFiles:" + saveFolder
+const savedOwnerKey = () => "savedOwner:" + saveFolder
+
+// one file in, one file out — text entries become the same markdown blobs the zip writer makes,
+// so the bytes on disk and the bytes in the zip are identical
+async function writeInto(dir, f){
+  const fh = await dir.getFileHandle(f.name, { create: true })
+  const w = await fh.createWritable()   // writes to a temp file and swaps on close(), so an
+  try {                                 // aborted write leaves the previous version intact
+    await w.write(f.data ?? new Blob([ f.text ], { type: "text/markdown" }))
+    await w.close()
+  } catch (err){
+    try { await w.abort() } catch (e){ /* ignore */ }
+    throw err
+  }
+}
+// Remove only what this save has orphaned — never by omission.
+//   SAFETY: `dir` is always the per-project subfolder we just created, never the folder the
+//   user picked; we never enumerate or prune that one. We only ever removeEntry names we
+//   ourselves recorded as written to THIS folder name, and without {recursive:true} — so a
+//   name collision with the user's own directory can cost us a file, never a tree.
+//   A keeps-only save therefore leaves non-kept files alone; deleted or renamed takes are cleaned.
+async function pruneProject(dir, prev, entries){
+  if (!Array.isArray(prev)) return
+  const owner = new Map(), writing = new Set()
+  for (const e of entries){
+    owner.set(e.name + ".md", e.t.id); owner.set(e.mediaName, e.t.id)
+    writing.add(e.t.id)
+  }
+  for (const rec of prev){
+    if (!rec.take) continue                                          // session.md / cues.md: fixed names
+    const gone = !takeById(rec.take)
+    // keep it when the take survives AND (we're rewriting this very name, or keeps-only left it out)
+    if (!gone && (owner.get(rec.name) === rec.take || !writing.has(rec.take))) continue
+    try { await dir.removeEntry(rec.name) } catch (e){ /* already gone — not an error */ }
+  }
+}
+async function saveToFolder(){
+  if (saveBusy) return
+  if (!canSaveToFolder()){ toast("this browser can't write into a folder — use export for a .zip"); return }
+  if (rec){ toast("finish the take first"); return }
+  const keepsOnly = $("#saveKeepOnly").checked
+  const src = keepsOnly ? state.takes.filter(t => t.keep) : state.takes
+  if (!src.length){ toast(keepsOnly ? "no takes marked keep" : "nothing to save yet — record something first"); return }
+  const go = $("#saveGo"), pick = $("#savePick"), label = go.textContent
+  saveBusy = true
+  go.disabled = true; pick.disabled = true; go.dataset.busy = "true"; go.textContent = "saving…"
+  $("#saveProgress").textContent = "choosing folder…"
+  try {
+    // the folder has to resolve BEFORE the export below: buildExport decodes every take to
+    // WAV, and that can outlast the ~5s transient-activation window, after which both the
+    // picker and the permission prompt refuse with SecurityError
+    const parent = await resolveSaveDir()
+    if (!parent) return
+    const name = await resolveFolderName()
+    $("#saveProgress").textContent = "reading takes…"
+    const { files, entries } = await exportFiles(src)
+    const proj = await parent.getDirectoryHandle(name, { create: true })
+    await pruneProject(proj, await idbGetMeta(savedFilesKey()), entries)
+    for (let i = 0; i < files.length; i++){
+      $("#saveProgress").textContent = (i + 1) + " / " + files.length + " — " + files[i].name
+      await writeInto(proj, files[i])
+    }
+    const owner = new Map()
+    for (const e of entries){ owner.set(e.name + ".md", e.t.id); owner.set(e.mediaName, e.t.id) }
+    idbSetMeta(savedFilesKey(), files.map(f => ({ name: f.name, take: owner.get(f.name) ?? null })))
+    idbSetMeta(savedOwnerKey(), state.session.created)
+    toast("saved " + files.length + " files to " + name)
+  } catch (err){
+    // a handle gone stale (folder moved or deleted) or stripped of its grant should re-pick
+    // next time; a plain write failure must not cost the user their folder choice
+    if (err && (err.name === "NotFoundError" || err.name === "NotAllowedError" || err.name === "SecurityError")){
+      saveDir = null
+      idbSetMeta("saveDir", null)
+    }
+    toast("save failed: " + (err.name || err.message || err))
+  } finally {
+    saveBusy = false
+    go.textContent = label
+    go.removeAttribute("data-busy")
+    $("#saveProgress").textContent = ""
+    renderSave()
+  }
+}
+function renderSave(){
+  const pick = $("#savePick"), go = $("#saveGo")
+  if (!canSaveToFolder()){
+    $("#saveMsg").textContent = "This browser can't write into a folder. Desktop Chrome and Edge can — Safari, Firefox and iOS can't. Use export in the menu to download a .zip instead."
+    $("#saveFolder").textContent = ""
+    pick.disabled = true; go.disabled = true
+    pick.classList.add("hidden"); go.classList.add("hidden")
+    return
+  }
+  pick.classList.remove("hidden"); go.classList.remove("hidden")
+  const keepsOnly = $("#saveKeepOnly").checked
+  const n = keepsOnly ? state.takes.filter(t => t.keep).length : state.takes.length
+  pick.textContent = saveDir ? "change folder" : "choose folder"
+  pick.disabled = saveBusy
+  go.disabled = saveBusy || !n
+  $("#saveMsg").textContent = !state.takes.length
+    ? "nothing to save yet — record something first"
+    : n + " take" + (n === 1 ? "" : "s") + (keepsOnly ? " (kept)" : "") + " + session.md + cues.md" +
+      (rec ? " — finish the take first" : "")
+}
+async function refreshSavePerm(){
+  if (!canSaveToFolder()) return
+  const perm = await dirPerm(saveDir)
+  const name = saveFolder || filePrefix(state.session.name, state.session.bpm, state.session.key, state.session.created)
+  let label = "no folder picked yet"
+  if (saveDir) label = perm === "granted" ? (saveDir.name || "folder") + " / " + name : "permission needed — press save"
+  $("#saveFolder").textContent = label
+}
+
+/* ---------- import: read our own markdown + YAML back into the session ---------- */
+// The export is the interface. session.md / cues.md / one .md per take already carry the
+// timings (start/duration), where the files live (media:), the identity (created/id) and the
+// metadata — so importing is reading our own format, tolerantly: we've emitted it for a while,
+// and older exports lack id/kind/cue_list.
+//
+// Four sources, one path: a .zip, a folder, a loose handful of files, or a single take .md.
+// Each reduces to a Map<basename, File> and everything after that is shared.
+const baseName = p => String(p).split("/").pop()
+const extOf = n => (String(n).split(".").pop() || "").toLowerCase()
+const AUDIO_EXT = new Set([ "wav", "m4a", "mp3", "ogg", "flac", "aac", "opus" ])
+const MIME_BY_EXT = {
+  wav: "audio/wav", m4a: "audio/mp4", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac",
+  webm: "video/webm", mp4: "video/mp4", mov: "video/quicktime"
+}
+const mimeFromExt = n => MIME_BY_EXT[extOf(n)] || "application/octet-stream"
+// a take's recordedAt must be reproducible from its filename: takeBaseName() bakes the date in,
+// so a wrong fallback would rename the take on the next export and the next import would then
+// double-add it
+const dateFromFilename = n => {
+  const m = String(n).match(/(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1] + "T00:00:00.000Z" : isoNow()
+}
+
+/* ---------- the YAML subset we emit, read back ---------- */
+// deliberately total: it never throws. A garbled line becomes a bare string or is dropped, so
+// one bad key can't cost the whole export.
+const stripBom = s => s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s
+function parseFlowArray(s){
+  const inner = s.trim().replace(/^\[/, "").replace(/\]$/, "").trim()
+  if (!inner) return []
+  const parts = []
+  let buf = "", inStr = false, esc = false
+  for (const ch of inner){
+    if (esc){ buf += ch; esc = false; continue }
+    if (inStr && ch === "\\"){ buf += ch; esc = true; continue }
+    if (ch === "\""){ inStr = !inStr; buf += ch; continue }
+    if (ch === "," && !inStr){ parts.push(buf); buf = ""; continue }
+    buf += ch
+  }
+  parts.push(buf)
+  return parts.filter(p => p.trim()).map(yamlScalar)
+}
+function yamlScalar(raw){
+  const s = String(raw).trim()
+  if (s === "" || s === "null" || s === "~") return null
+  if (s === "true") return true
+  if (s === "false") return false
+  // q() is JSON.stringify, so a quoted scalar here is exactly JSON
+  if (s.startsWith("\"")){ try { return JSON.parse(s) } catch (e){ return s.replace(/^"|"$/g, "") } }
+  if (s.startsWith("[")) return parseFlowArray(s)
+  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
+  return s
+}
+// a block sequence's items may be scalars (media:) or flat maps (cue_list:)
+function parseBlockSeq(lines){
+  const items = []
+  let cur = null
+  for (const line of lines){
+    const m = line.match(/^\s*-\s*(.*)$/)
+    if (m){
+      if (cur) items.push(cur)
+      cur = { text: m[1], extra: [] }
+    } else if (cur) cur.extra.push(line.trim())
+  }
+  if (cur) items.push(cur)
+  return items.map(it => {
+    const kv = it.text.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
+    if (!kv) return yamlScalar(it.text)
+    const obj = { [kv[1]]: yamlScalar(kv[2]) }
+    for (const e of it.extra){
+      const em = e.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
+      if (em) obj[em[1]] = yamlScalar(em[2])
+    }
+    return obj
+  })
+}
+function parseYamlBlock(src){
+  const lines = src.split("\n"), data = {}
+  for (let i = 0; i < lines.length; i++){
+    const line = lines[i]
+    if (!line.trim() || line.trim().startsWith("#") || /^\s/.test(line)) continue
+    const m = line.match(/^([A-Za-z0-9_-]+):(.*)$/)
+    if (!m) continue
+    const key = m[1], rest = m[2]
+    if (rest.trim() !== ""){ data[key] = yamlScalar(rest); continue }
+    const items = []
+    let j = i + 1
+    while (j < lines.length && /^\s+\S/.test(lines[j])){ items.push(lines[j]); j++ }
+    if (items.some(l => /^\s*-\s/.test(l))){ data[key] = parseBlockSeq(items); i = j - 1 }
+    else data[key] = null
+  }
+  return data
+}
+// anchored front matter only; no fence means "not ours", which callers treat as tolerable
+function parseFrontMatter(text){
+  const t = stripBom(String(text)).replaceAll("\r\n", "\n")
+  const m = t.match(/^---\n([\s\S]*?)\n---\n?/)
+  if (!m) return { data: {}, body: t }
+  return { data: parseYamlBlock(m[1]), body: t.slice(m[0].length) }
+}
+const takeNotes = body => body.replace(/^\s*!\[[^\]]*\]\([^)]*\)\s*/, "").trim()
+const sessionNotes = body => {
+  const m = body.match(/^##[ \t]*notes[ \t]*$([\s\S]*)/im)
+  return m ? m[1].trim() : ""
+}
+
+/* ---------- zip reader: our writer stores, a re-zip deflates ---------- */
+const findEocd = dv => {
+  for (let i = dv.byteLength - 22; i >= Math.max(0, dv.byteLength - 22 - 0xFFFF); i--){
+    if (dv.getUint32(i, true) === 0x06054b50) return i
+  }
+  return -1
+}
+async function inflateRaw(bytes){
+  if (typeof DecompressionStream === "undefined") return null
+  try {
+    const stream = new Blob([ bytes ]).stream().pipeThrough(new DecompressionStream("deflate-raw"))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  } catch (e){ return null }
+}
+// sizes come from the central directory, not the local header: local sizes can be zeroed out
+// when the archiver used a data descriptor
+async function readZip(file){
+  const bytes = new Uint8Array(await file.arrayBuffer()), dv = new DataView(bytes.buffer)
+  const eocd = findEocd(dv)
+  if (eocd < 0) throw new Error("not a zip")
+  const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true)
+  if (count === 0xFFFF || cdOff === 0xFFFFFFFF) throw new Error("that zip is too large to open here")
+  const dec = new TextDecoder(), entries = []
+  let p = cdOff
+  for (let i = 0; i < count && dv.getUint32(p, true) === 0x02014b50; i++){
+    const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true)
+    entries.push({
+      name: dec.decode(bytes.subarray(p + 46, p + 46 + nameLen)),
+      method: dv.getUint16(p + 10, true),
+      size: dv.getUint32(p + 20, true),
+      at: dv.getUint32(p + 42, true)
+    })
+    p += 46 + nameLen + extraLen + commentLen
+  }
+  const files = new Map(), skipped = []
+  for (const e of entries){
+    if (e.name.endsWith("/") || e.size === 0) continue
+    const name = baseName(e.name)
+    if (!name || name.startsWith(".")) continue
+    const start = e.at + 30 + dv.getUint16(e.at + 26, true) + dv.getUint16(e.at + 28, true)
+    let payload = bytes.subarray(start, start + e.size)
+    if (e.method === 8){
+      const inflated = await inflateRaw(payload)
+      if (!inflated){ skipped.push(name); continue }   // no DecompressionStream in this browser
+      payload = inflated
+    } else if (e.method !== 0){ skipped.push(name); continue }
+    files.set(name, new File([ payload ], name, { type: mimeFromExt(name) }))
+  }
+  return { files, skipped }
+}
+
+/* ---------- folder + loose-file sources ---------- */
+async function walkDir(dir, base = ""){
+  const out = []
+  for await (const h of dir.values()){
+    const path = base ? base + "/" + h.name : h.name
+    if (h.kind === "file") out.push({ path, file: await h.getFile() })
+    else if (h.kind === "directory") out.push(...await walkDir(h, path))
+  }
+  return out
+}
+// save-to-folder writes into a per-project subfolder, so a picked parent holds groups; pick the
+// one that looks like an export rather than merging several sessions by accident
+function groupByDir(items){
+  const groups = new Map()
+  for (const it of items){
+    const path = it.path || it.file.name
+    const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ""
+    if (!groups.has(dir)) groups.set(dir, new Map())
+    groups.get(dir).set(baseName(path), it.file)
+  }
+  return groups
+}
+function pickExportGroup(groups){
+  let best = null
+  for (const map of groups.values()){
+    const mds = [ ...map.keys() ].filter(n => /\.md$/i.test(n)).length
+    const score = (map.has("session.md") ? 1000 : 0) + mds
+    if (!best || score > best.score) best = { score, map }
+  }
+  return best ? best.map : new Map()
+}
+
+/* ---------- one take's markdown -> a take ---------- */
+// kind: is emitted now, but a legacy or hand-made file may lack it, and a filename can't be trusted
+// to supply it — .webm reads back as video/webm even when it's audio, and a renamed file lies
+// outright. So we recover it from the bytes, in a fixed order: the container, then the extension,
+// never the reverse.
+//
+// The order is load-bearing because the two mistakes don't cost the same. Calling audio what is
+// really video makes the next export write the take out as a WAV, and the video track is gone with
+// nothing to notice it by. Calling video what is really audio only means the take keeps its own
+// container instead of being converted. So every uncertain answer here resolves to video.
+//
+// What we deliberately don't do is decode the audio to find out. Chrome will demux a WebM and
+// decode the Opus track inside it quite happily, so a successful decode proves audio is present
+// and says nothing whatever about video being absent. That inference is one-directional, and every
+// bug this file has had came from leaning on it.
+const EBML_MAGIC = [ 0x1A, 0x45, 0xDF, 0xA3 ]
+const WEBM_VIDEO_CODEC = /V_VP8|V_VP9|V_AV1|V_MPEG4/
+// Matroska/WebM only: its track codec IDs are literal ASCII near the top of the file, so the
+// container can be asked directly. Anything else returns null — "not one I can judge", which is
+// not the same answer as "no video".
+async function sniffKind(blob){
+  try {
+    const head = await blob.slice(0, 65536).arrayBuffer()   // Tracks sits near the top
+    const b = new Uint8Array(head)
+    if (!EBML_MAGIC.every((v, i) => b[i] === v)) return null
+    return WEBM_VIDEO_CODEC.test(new TextDecoder("latin1").decode(head)) ? "video" : "audio"
+  } catch (e){ return null }
+}
+async function resolveKind(mediaName, blob){
+  const ext = extOf(mediaName)
+  const sniffed = await sniffKind(blob)
+  if (sniffed) return sniffed        // the container judged itself, which outranks its name
+  if (AUDIO_EXT.has(ext)) return "audio"
+  // mp4/mov: their reported type, which is extension-derived too — so an audio-only .mp4 reads as
+  // video here. That's the harmless direction, and it's the best signal left for ISO-BMFF, whose
+  // moov box can sit at the end of the file where a header sniff would never see it
+  if (ext === "mp4" || ext === "mov") return ((blob && blob.type) || "").startsWith("audio/") ? "audio" : "video"
+  return "video"                     // unrecognised, and nothing proved audio-only: don't guess audio
+}
+const mimeFor = (name, kind, file) => {
+  const ext = extOf(name)
+  if (ext === "webm") return kind === "video" ? "video/webm" : "audio/webm"
+  if (ext === "mp4" || ext === "mov") return kind === "video" ? "video/mp4" : "audio/mp4"
+  return (file && file.type) || mimeFromExt(name)
+}
+const asNum = v => Number.isFinite(Number(v)) ? Number(v) : 0
+async function takeFromMd(mdName, data, body, files){
+  const base = mdName.replace(/\.md$/i, "")
+  const name = String(data.title || "").trim() || base
+  const mediaName = typeof data.media === "string" ? baseName(data.media) : ""
+  const file = mediaName ? files.get(mediaName) : null
+  if (!file) return { skip: true, missing: true, name: mediaName || name }
+  const kind = data.kind === "audio" || data.kind === "video" ? data.kind
+    : await resolveKind(mediaName, file)
+  return { take: {
+    id: typeof data.id === "string" && data.id ? data.id : uid(),
+    name,
+    kind,
+    start: Math.max(0, asNum(data.start)),
+    duration: Math.max(0, asNum(data.duration)),   // audio refines this once decoded
+    recordedAt: typeof data.recorded === "string" && data.recorded ? data.recorded : dateFromFilename(mdName),
+    bpm: data.bpm ? Number(data.bpm) : null,
+    key: typeof data.key === "string" ? data.key : "",
+    tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    notes: takeNotes(body),
+    keep: data.keep === true,
+    mime: mimeFor(mediaName, kind, file),
+    ext: extOf(mediaName),
+    blob: file, buffer: null, peaks: null, lane: 0
+  } }
+}
+
+/* ---------- cues: cue_list is authoritative, the prose is the legacy fallback ---------- */
+const cueKey = c => c.pos.toFixed(2) + "|" + c.name + "|" + c.notes
+function parseCueProse(body){
+  const out = [], lines = body.split("\n")
+  for (let i = 0; i < lines.length; i++){
+    const m = lines[i].match(/^-\s*\*\*(\d+):(\d{2})(?:\s*\(bar\s*([^)]*)\))?(?:\s*—\s*(.*?))?\*\*\s*$/)
+    if (!m) continue
+    const notes = []
+    let j = i + 1
+    while (j < lines.length && /^\s{2,}\S/.test(lines[j]) && !/^\s*-\s/.test(lines[j])){ notes.push(lines[j].trim()); j++ }
+    out.push({ id: uid(), pos: Number(m[1]) * 60 + Number(m[2]), name: (m[4] || "").trim(), notes: notes.join("\n") })
+  }
+  return out
+}
+function cuesFrom(data, body){
+  if (Array.isArray(data.cue_list)){
+    return data.cue_list.filter(c => c && typeof c === "object").map(c => ({
+      id: uid(), pos: Math.max(0, asNum(c.pos)), name: String(c.name ?? ""), notes: String(c.notes ?? "")
+    }))
+  }
+  return parseCueProse(body)
+}
+
+/* ---------- merging into the session: additive, never destructive ---------- */
+// a take's identity for dedupe is the full export filename, because the 001/002 prefix repeats
+// across every export — a bare number, or a weak key, would skip unrelated takes. The uuid in
+// `id:` is a second, skip-only check, so a take renamed here still won't re-add on re-import.
+function exportNamesOf(takes){
+  const used = new Set(), names = new Set(), ids = new Set()
+  const sorted = [ ...takes ].sort((a, b) => a.start - b.start)
+  sorted.forEach((t, i) => { names.add(takeBaseName(t, i, used)); ids.add(t.id) })
+  return { names, ids }
+}
+const pristineSession = s =>
+  !s.name && !s.bpm && !s.key && !(s.tags || []).length && !(s.notes || "").trim()
+function mergeSession(data, body){
+  const s = state.session, notes = sessionNotes(body), tags = Array.isArray(data.tags) ? data.tags.map(String) : []
+  if (pristineSession(s) && !state.takes.length){
+    // an empty session adopts the import wholesale — but `created` is the save-folder ownership
+    // key, so it only moves when nothing here owns it yet
+    s.name = String(data.title || "")
+    s.bpm = data.bpm ? Number(data.bpm) : null
+    s.key = String(data.key || "")
+    s.tags = tags
+    s.notes = notes
+    if (typeof data.created === "string" && data.created) s.created = data.created
+    return
+  }
+  if (!s.name && data.title) s.name = String(data.title)
+  if (!s.bpm && data.bpm) s.bpm = Number(data.bpm)
+  if (!s.key && data.key) s.key = String(data.key)
+  if (!(s.tags || []).length && tags.length) s.tags = tags
+  if (!(s.notes || "").trim() && notes) s.notes = notes
+}
+function mergeCues(cues){
+  const seen = new Set(state.cues.map(cueKey))
+  let added = 0
+  for (const c of cues){
+    const k = cueKey(c)
+    if (seen.has(k)) continue
+    seen.add(k); state.cues.push(c); added++
+  }
+  if (added) state.cues.sort((a, b) => a.pos - b.pos)
+  return added
+}
+
+/* ---------- the single parse path every source funnels into ---------- */
+async function importFileSet(files){
+  const existing = exportNamesOf(state.takes)
+  const seen = new Set(), added = [], dup = [], missing = [], skipped = []
+  let session = null, cueData = null
+  for (const n of [ ...files.keys() ].filter(n => /\.md$/i.test(n))){
+    const { data, body } = parseFrontMatter(await files.get(n).text())
+    const lower = n.toLowerCase()
+    if (lower === "session.md") session = { data, body }
+    else if (lower === "cues.md") cueData = { data, body }
+    else {
+      const base = n.replace(/\.md$/i, "")
+      const rid = typeof data.id === "string" ? data.id : ""
+      if (existing.names.has(base) || seen.has(base) || (rid && existing.ids.has(rid))){ dup.push(base); continue }
+      const r = await takeFromMd(n, data, body, files)
+      if (r.skip){ (r.missing ? missing : skipped).push(r.name); continue }
+      seen.add(base)
+      added.push({ ...r.take, importFile: base + ".md" })   // remembered, so identity survives a rename
+    }
+  }
+  const cues = cueData ? cuesFrom(cueData.data, cueData.body) : []
+  if (session) mergeSession(session.data, session.body)
+  const cuesAdded = mergeCues(cues)
+  if (added.length){
+    for (const t of added){ state.takes.push(t); idbPutTake(t) }
+    idbSetMeta("session", state.session)
+    idbSetMeta("cues", state.cues)
+    renderMasthead()
+    refresh()
+    added.forEach(t => ensurePeaks(t))       // decode in the background; each re-renders as it lands
+  } else if (cuesAdded || session){
+    idbSetMeta("session", state.session)
+    idbSetMeta("cues", state.cues)
+    renderMasthead(); refresh()
+  }
+  return { added: added.length, dup: dup.length, cues: cuesAdded, missing, skipped }
+}
+
+/* ---------- the source adapters ---------- */
+async function importZip(file){
+  const { files, skipped } = await readZip(file)
+  const summary = await importFileSet(files)
+  summary.skipped.push(...skipped)
+  return summary
+}
+async function importDirHandle(dir){
+  const groups = groupByDir(await walkDir(dir))
+  const summary = await importFileSet(pickExportGroup(groups))
+  if (groups.size > 1) summary.other = groups.size - 1
+  return summary
+}
+async function importFileList(list, opts = {}){
+  const arr = [ ...list ]
+  const files = opts.group
+    ? pickExportGroup(groupByDir(arr.map(f => ({ path: f.webkitRelativePath || f.name, file: f }))))
+    : new Map(arr.map(f => [ baseName(f.name), f ]))
+  return importFileSet(files)
+}
+
+/* ---------- the import page ---------- */
+let importBusy = false
+const IMPORT_BTNS = [ "#importPickZip", "#importPickFolder", "#importPickFiles" ]
+function renderImport(){
+  const n = state.takes.length
+  $("#importHint").textContent = canSaveToFolder()
+    ? "drop a .zip here, or choose a folder / the export files"
+    : "drop a .zip here, or choose the export files"
+  $("#importMsg").textContent = n
+    ? n + " take" + (n > 1 ? "s" : "") + " here — import adds, it never overwrites"
+    : "an empty session — import lands straight into it"
+}
+const importDetail = s => {
+  const bits = []
+  if (s.missing.length) bits.push("no media: " + s.missing.join(", "))
+  if (s.skipped.length) bits.push("unreadable: " + s.skipped.join(", "))
+  if (s.other) bits.push(s.other + " other folder" + (s.other > 1 ? "s" : "") + " ignored")
+  return bits.join("  ·  ")
+}
+const importToast = s => {
+  const bits = [ s.added ? "imported " + s.added : "nothing new" ]
+  if (s.dup) bits.push(s.dup + " already here")
+  if (s.cues) bits.push(s.cues + " cue" + (s.cues > 1 ? "s" : ""))
+  if (s.missing.length) bits.push(s.missing.length + " without media")
+  if (s.skipped.length) bits.push(s.skipped.length + " unreadable")
+  return bits.join(" · ")
+}
+// a null summary means the picker was cancelled — not an error, so say nothing
+async function runImport(fn){
+  if (importBusy) return
+  importBusy = true
+  const prog = $("#importProgress")
+  for (const id of IMPORT_BTNS) $(id).disabled = true
+  prog.textContent = "reading…"
+  try {
+    const summary = await fn()
+    if (!summary){ prog.textContent = ""; return }
+    prog.textContent = importDetail(summary)
+    toast(importToast(summary))
+  } catch (err){
+    prog.textContent = ""
+    toast("import failed: " + (err.message || err))
+  } finally {
+    importBusy = false
+    for (const id of IMPORT_BTNS) $(id).disabled = false
+    renderImport()
   }
 }
 
@@ -1856,8 +2972,14 @@ function renderMasthead(){
   const s = state.session
   $("#mastTitle").textContent = s.name || ""
   $("#recTitle").textContent = s.name || ""      // the record page shows the same title
-  $("#mastBpm").innerHTML = s.bpm ? "<b>" + esc(String(s.bpm)) + "</b> BPM" : ""
-  $("#mastKey").innerHTML = s.key ? "<b>" + esc(s.key) + "</b>" : ""
+  const bpm = s.bpm ? "<b>" + esc(String(s.bpm)) + "</b> BPM" : ""
+  const key = s.key ? "<b>" + esc(s.key) + "</b>" : ""
+  $("#mastBpm").innerHTML = bpm
+  $("#mastKey").innerHTML = key
+  // the gutter corner repeats them on coarse pointers, where the masthead chips are hidden —
+  // but the corner is 44px wide, so the unit is dropped and left to the title attribute
+  $("#gutterBpm").innerHTML = s.bpm ? "<b>" + esc(String(s.bpm)) + "</b>" : ""
+  $("#gutterKey").innerHTML = key
 }
 // click the title to rename the session in place; mount is the page the title lives on
 let renamedAt = 0
@@ -1912,15 +3034,18 @@ function wire(){
   $("#masthead").addEventListener("click", e => {
     const chip = e.target.closest(".m-chip")
     if (chip){
-      openMenu()
-      const sec = (chip.id === "mastBpm" ? $("#bpmVal") : $("#keyMajor")).closest(".m-sec")
-      sec.scrollIntoView({ block: "nearest" })
+      openMetaSec(chip.dataset.sec)
       return
     }
     if (performance.now() - renamedAt < 250) return   // the blur that committed a rename also lands here
     startRename($("#masthead"))
   })
   $("#mastTitle").addEventListener("keydown", e => { if (e.key === "Enter") startRename($("#masthead")) })
+  // the gutter corner carries the same two chips on coarse pointers, so it reuses the jump
+  $("#gutterCorner").addEventListener("click", e => {
+    const chip = e.target.closest(".m-chip")
+    if (chip && chip.dataset.sec) openMetaSec(chip.dataset.sec)
+  })
   $("#burger").addEventListener("click", () => { ovlIsOpen("#menuOvl") ? closeMenu() : openMenu() })
 
   // menu wiring
@@ -1931,6 +3056,67 @@ function wire(){
   $("#mNew").addEventListener("click", () => { closeMenu(); newSession() })
   $("#mExport").addEventListener("click", () => doExport())
   $("#mRender").addEventListener("click", () => renderSession())
+  // wait for the close to settle before switching pages, or the menu refocuses the burger
+  // that the cover page just made inert
+  $("#mSave").addEventListener("click", () => closeMenu(() => setPage("save")))
+  $("#saveExit").addEventListener("click", () => setPage("timeline"))
+  // ---------- import ----------
+  $("#mImport").addEventListener("click", () => closeMenu(() => setPage("import")))
+  $("#importExit").addEventListener("click", () => setPage("timeline"))
+  // webkitdirectory is set here, not in the markup: the attribute trips html-validate, and
+  // unsupported browsers just ignore it and fall back to a multi-file pick
+  $("#importFolderInput").webkitdirectory = true
+  const pickImport = (btn, input) => $(btn).addEventListener("click", () => { if (!importBusy) $(input).click() })
+  pickImport("#importPickZip", "#importZipInput")
+  pickImport("#importPickFiles", "#importFilesInput")
+  // prefer a real directory handle — it survives a re-pick and reads subfolders without the
+  // browser prefixing every name with webkitRelativePath
+  $("#importPickFolder").addEventListener("click", () => {
+    if (importBusy) return
+    if (!canSaveToFolder()){ $("#importFolderInput").click(); return }
+    runImport(async () => {
+      let dir
+      try { dir = await window.showDirectoryPicker({ id: "rough-cut-import", mode: "read" }) }
+      catch (err){ if (err && err.name === "AbortError") return null; throw err }   // cancelled, not failed
+      return importDirHandle(dir)
+    })
+  })
+  $("#importZipInput").addEventListener("change", e => {
+    const f = e.target.files[0]
+    e.target.value = ""                    // so the same file can be chosen twice in a row
+    if (f) runImport(() => importZip(f))
+  })
+  $("#importFolderInput").addEventListener("change", e => {
+    const fs = [ ...e.target.files ]        // snapshot: clearing .value empties the live FileList
+    e.target.value = ""
+    if (fs.length) runImport(() => importFileList(fs, { group: true }))
+  })
+  $("#importFilesInput").addEventListener("change", e => {
+    const fs = [ ...e.target.files ]
+    e.target.value = ""
+    if (fs.length) runImport(() => importFileList(fs))
+  })
+  const impEl = $("#import")
+  impEl.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("import-drop") })
+  impEl.addEventListener("dragleave", e => {
+    if (!impEl.contains(e.relatedTarget)) document.body.classList.remove("import-drop")
+  })
+  impEl.addEventListener("drop", e => {
+    e.preventDefault(); document.body.classList.remove("import-drop")
+    if (importBusy) return
+    // dropping a directory gives us an empty FileList in most browsers — the folder button is
+    // the supported path, so point at it rather than failing silently
+    const files = [ ...(e.dataTransfer ? e.dataTransfer.files : []) ]
+    if (!files.length){ toast("drop a .zip — or use choose folder"); return }
+    const zip = files.find(f => /\.zip$/i.test(f.name))
+    runImport(() => zip ? importZip(zip) : importFileList(files))
+  })
+  $("#saveKeepOnly").addEventListener("change", renderSave)
+  $("#savePick").addEventListener("click", async () => {
+    await pickSaveDir()
+    renderSave(); refreshSavePerm()
+  })
+  $("#saveGo").addEventListener("click", () => saveToFolder())
   $("#bpmClear").addEventListener("click", () => { state.session.bpm = null; saveSessionMeta(); syncMenu(); renderMasthead(); onBpmChange() })
   $("#keyClear").addEventListener("click", () => { state.session.key = ""; saveSessionMeta(); syncMenu(); renderMasthead() })
   holdable($("#bpmDown"), () => bpmStep(-1))
@@ -1940,32 +3126,58 @@ function wire(){
   trapFocus($("#menuPanel"))
   trapFocus($("#viewPanel"))
 
-  // scrub-seek on the ruler and empty timeline space; a click (no drag) deselects
-  // the take and closes the detail view
+  // scrub-seek on the ruler, seek-or-dismiss on empty lane space, and the touch gestures that
+  // stand in for the mouse-only ones. Branch on e.pointerType at event time, never on a
+  // load-time flag, so a hybrid laptop does the right thing per input device.
   let downX = 0, downY = 0
   $("#content").addEventListener("pointerdown", e => {
     if (e.button !== 0) return
+    if (e.target.closest(".bar") || e.target.closest(".cue")) return   // they own their presses
     downX = e.clientX; downY = e.clientY
-    const onBar = !!e.target.closest(".bar")
+    const touch = e.pointerType === "touch"
     const wasPlaying = state.playing
-    if (wasPlaying) pausePlayback()
     const tl = $("#tl")
     const seek = ev => {
       const r = tl.getBoundingClientRect()
       seekTo(Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom))
     }
-    seek(e)
-    const mv = ev => seek(ev)
-    window.addEventListener("pointermove", mv)
-    window.addEventListener("pointerup", ev => {
+    // a mouse seeks the moment it presses; a finger waits for the release, because on the
+    // lanes that same press may still turn out to be a pan — or a cue
+    const h = touch ? holdStart(e, () => addCue(cueAt(e))) : null
+    const scrubbing = !touch || !!e.target.closest("#rulerWrap")
+    if (wasPlaying && scrubbing) pausePlayback()
+    if (scrubbing) seek(e)
+    const mv = ev => { if (scrubbing && ev.buttons) seek(ev) }
+    const end = () => {
       window.removeEventListener("pointermove", mv)
-      const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > 4
-      if (!onBar && !moved && (state.selectedId || state.selectedCueId)){ dismissView() }
+      window.removeEventListener("pointerup", up)
+      window.removeEventListener("pointercancel", end)
+    }
+    const up = ev => {
+      end()
+      const moved = Math.hypot(ev.clientX - downX, ev.clientY - downY) > (touch ? HOLDSLOP : 4)
+      if (touch){
+        if (moved || (h && h.fired)) return      // a pan, or a cue the hold already dropped
+        if (scrubbing){ if (wasPlaying) startPlayback(); return }
+        // an empty lane: seek, or put the open details away first
+        if (state.selectedId || state.selectedCueId) dismissView()
+        else seek(ev)
+        return
+      }
+      if (!moved && (state.selectedId || state.selectedCueId)){ dismissView() }
       else if (wasPlaying && !moved) startPlayback()
-    }, { once: true })
+    }
+    // a browser that claims the press for a scroll fires pointercancel, never pointerup —
+    // without that path the move listener would outlive the gesture and keep seeking
+    window.addEventListener("pointermove", mv)
+    window.addEventListener("pointerup", up, { once: true })
+    window.addEventListener("pointercancel", end)
   })
 
-  $("#tl").addEventListener("scroll", drawRuler)
+  // the ruler is viewport-wide so it repaints on the horizontal scroll, and the gutter's
+  // lane rows ride the vertical one — same event, no second scrollbar
+  $("#tl").addEventListener("scroll", () => { drawRuler(); syncGutter() })
+  attachLiftDrag()
 
   // double-click the ruler (or timeline background) to drop a cue
   const cueAt = ev => {
@@ -1974,8 +3186,16 @@ function wire(){
     return Math.max(0, (ev.clientX - r.left + tl.scrollLeft) / state.zoom)
   }
   $("#rulerWrap").addEventListener("dblclick", e => { e.preventDefault(); addCue(cueAt(e)) })
+  // a 400ms hold raises the platform's own context menu on some browsers. Only touch (and a
+  // take actually held) is suppressed, so desktop right-click is untouched — Firefox's
+  // contextmenu carries no pointerType at all, hence the explicit check rather than a negation
+  $("#tl").addEventListener("contextmenu", e => {
+    if (pick || (e.pointerType && e.pointerType !== "mouse")) e.preventDefault()
+  })
+  // the ruler is inside #content, so its double-click bubbles down here too — bail on the
+  // ruler and on takes/cues, or one gesture would drop two cues on the same second
   $("#content").addEventListener("dblclick", e => {
-    if (e.target.closest(".bar") || e.target.closest(".cue")) return
+    if (e.target.closest("#rulerWrap") || e.target.closest(".bar") || e.target.closest(".cue")) return
     addCue(cueAt(e))
   })
 
@@ -1984,16 +3204,18 @@ function wire(){
     if (e.key === "Escape"){
       if (ovlIsOpen("#menuOvl")) closeMenu()
       else if (ovlIsOpen("#viewOvl")) dismissView()
-      else if (state.page === "record") setPage("timeline")
+      else if (state.page !== "timeline") setPage("timeline")
       return
     }
     if (ovlIsOpen("#menuOvl") || ovlIsOpen("#viewOvl")) return
     // the red page has no transport, and playing the other takes out loud would bleed
-    // straight back into a live mic — so record is the only key that means anything there
+    // straight back into a live mic — so record is the only key that means anything there.
+    // a cover page has no transport either: R there would start recording behind it.
     if (state.page === "record"){
       if (e.key === "r" || e.key === "R") toggleRecord()
       return
     }
+    if (COVER_PAGES.has(state.page)) return
     if (e.code === "Space"){ e.preventDefault(); togglePlay() }
     else if (e.key === "r" || e.key === "R") toggleRecord()
   })
@@ -2001,7 +3223,11 @@ function wire(){
     releaseMedia()
     if (rec){ e.preventDefault(); e.returnValue = "" }
   })
-  window.addEventListener("resize", debounce(() => { sizeRuler(); drawRuler() }, 120))
+  window.addEventListener("resize", debounce(() => { syncMetrics(); sizeRuler(); drawRuler() }, 120))
+  window.addEventListener("orientationchange", debounce(syncMetrics, 200))
+  // a touchscreen appearing or going away changes RULERH, so re-metric and re-lay-out
+  const pq = matchMedia("(any-pointer: coarse)")
+  if (pq.addEventListener) pq.addEventListener("change", syncMetrics)
 }
 function newSession(){
   if (state.takes.length && !confirm("Start a new session? All current takes are deleted from this browser.")) return
@@ -2026,6 +3252,7 @@ function newSession(){
 /* ---------- boot ---------- */
 async function init(){
   wire()
+  applyMetrics()          // before the first layout pass: RULERH drives every lane offset
   try { await idbOpen() }
   catch (e){ toast("storage unavailable — takes will not survive a reload") }
   if (db){
@@ -2037,9 +3264,10 @@ async function init(){
     const cs = await idbGetMeta("cues")
     if (Array.isArray(cs)) state.cues = cs.sort((a, b) => a.pos - b.pos)
     const page = await idbGetMeta("page")
-    if (page === "record" || page === "timeline") state.page = page
+    if (page === "record" || page === "save" || page === "import" || page === "timeline") state.page = page
     const video = await idbGetMeta("video")
     if (typeof video === "boolean"){ $("#videoChk").checked = video; $("#recVideoChk").checked = video }
+    saveDir = await idbGetMeta("saveDir")     // a directory handle survives the round trip
     state.takes = (await idbAllTakes()).sort((a, b) => (a.recordedAt < b.recordedAt ? -1 : 1))
     state.takes.forEach(t => { t.buffer = null; t.peaks = null; t.el = null })
   }
@@ -2047,6 +3275,8 @@ async function init(){
   refresh(); updateTimeReadout()
   applyView(false)          // restore the page you left, without yanking focus on load
   syncVideoPreview()        // reopen the self-view if we came back to the video page
+  refreshSavePerm()         // show the folder and whether this load still has permission for it
+  renderImport()            // the import page may be the restored one
   state.takes.forEach(t => ensurePeaks(t))
   if (state.takes.length) toast(state.takes.length + " take" + (state.takes.length > 1 ? "s" : "") + " restored")
 }
